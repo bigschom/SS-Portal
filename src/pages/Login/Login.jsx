@@ -324,7 +324,7 @@ const LoginPage = () => {
         </div>
 
         <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-6">
-          Welcome Back
+          Welcome to SS Portal
         </h2>
         
         {error && (

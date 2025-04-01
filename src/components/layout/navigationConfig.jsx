@@ -7,11 +7,7 @@ export const roleBasedNavigation = {
       path: '/admindashboard', 
       icon: LayoutDashboard 
     },
-        { 
-      name: 'Guard Shift Report', 
-      path: '/GuardShiftForm', 
-      icon: ClipboardList
-    },
+
     {
       name: 'User Management',
       path: '/user-management',
@@ -70,11 +66,6 @@ export const roleBasedNavigation = {
       name: 'Dashboard', 
       path: '/supervisordashboard', 
       icon: LayoutDashboard 
-    },
-    { 
-      name: 'Guard Shift Report', 
-      path: '/GuardShiftForm', 
-      icon: ClipboardList
     },
     {
       name: 'Internship Overview',

@@ -20,18 +20,18 @@ const useRoleCheck = () => {
    * Check if current user has the manager role
    * @returns {boolean} - True if user is a manager
    */
-  const isManager = () => {
+  const isSuperUser = () => {
     if (!user) return false;
-    return user.role === 'manager';
+    return user.role === 'superuser';
   };
 
   /**
    * Check if current user has the supervisor role
    * @returns {boolean} - True if user is a supervisor
    */
-  const isSupervisor = () => {
+  const isStandardUser = () => {
     if (!user) return false;
-    return user.role === 'supervisor';
+    return user.role === 'standarduser';
   };
 
   /**
@@ -98,8 +98,8 @@ const useRoleCheck = () => {
     
     const roleHierarchy = {
       'admin': 7,
-      'manager': 6,
-      'supervisor': 5,
+      'superuser': 6,
+      'standarduser': 5,
       'security_guard': 4,
       'user': 3,
       'user1': 2,
@@ -125,7 +125,7 @@ const useRoleCheck = () => {
    * @returns {boolean} - True if user can manage security personnel
    */
   const canManageSecurityPersonnel = () => {
-    return isAdmin() || isManager();
+    return isAdmin() || isSuperUser();
   };
 
   /**
@@ -133,7 +133,7 @@ const useRoleCheck = () => {
    * @returns {boolean} - True if user can generate reports
    */
   const canGenerateReports = () => {
-    return isAdmin() || isManager() || isSupervisor();
+    return isAdmin() || isSuperUser() || isSupervisor();
   };
 
   /**
@@ -141,7 +141,7 @@ const useRoleCheck = () => {
    * @returns {boolean} - True if user can view all security incidents
    */
   const canViewAllIncidents = () => {
-    return isAdmin() || isManager() || isSupervisor();
+    return isAdmin() || isSuperUser() || isSupervisor();
   };
 
   /**
@@ -173,7 +173,7 @@ const useRoleCheck = () => {
    * @returns {boolean} - True if user can approve access requests
    */
   const canApproveAccessRequests = () => {
-    return isAdmin() || isManager();
+    return isAdmin() || isSuperUser();
   };
 
   /**
@@ -186,8 +186,8 @@ const useRoleCheck = () => {
 
   return {
     isAdmin,
-    isManager,
-    isSupervisor,
+    isSuperUser,
+    isStandardUser,
     isSecurityGuard,
     isBasicUser,
     isUser1,

@@ -2,9 +2,9 @@ export const getRoleBasedDashboard = (role) => {
     switch (role?.toLowerCase()) {
       case 'admin':
         return '/admindashboard';
-      case 'security_guard':
+      case 'superuser':
         return '/securityguarddashboard';
-      case 'supervisor':
+      case 'standarduser':
         return '/supervisordashboard';
       case 'user':
       case 'user1':
