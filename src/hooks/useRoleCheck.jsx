@@ -1,7 +1,8 @@
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from './useAuth';
 
 /**
  * Custom hook for checking user role-based access permissions
+ * Supported roles: admin, superuser, standarduser, security_guard, user, user1, user2
  * @returns {Object} - Object with methods for checking role-based permissions
  */
 const useRoleCheck = () => {
@@ -17,8 +18,8 @@ const useRoleCheck = () => {
   };
 
   /**
-   * Check if current user has the manager role
-   * @returns {boolean} - True if user is a manager
+   * Check if current user has the superuser role
+   * @returns {boolean} - True if user is a superuser
    */
   const isSuperUser = () => {
     if (!user) return false;
@@ -26,8 +27,8 @@ const useRoleCheck = () => {
   };
 
   /**
-   * Check if current user has the supervisor role
-   * @returns {boolean} - True if user is a supervisor
+   * Check if current user has the standarduser role
+   * @returns {boolean} - True if user is a standarduser
    */
   const isStandardUser = () => {
     if (!user) return false;
@@ -121,7 +122,7 @@ const useRoleCheck = () => {
   };
 
   /**
-   * Check if the user can manage security personnel (admin and manager)
+   * Check if the user can manage security personnel (admin and superuser)
    * @returns {boolean} - True if user can manage security personnel
    */
   const canManageSecurityPersonnel = () => {
@@ -129,11 +130,11 @@ const useRoleCheck = () => {
   };
 
   /**
-   * Check if the user can generate reports (admin, manager, supervisor)
+   * Check if the user can generate reports (admin, superuser, standarduser)
    * @returns {boolean} - True if user can generate reports
    */
   const canGenerateReports = () => {
-    return isAdmin() || isSuperUser() || isSupervisor();
+    return isAdmin() || isSuperUser() || isStandardUser();
   };
 
   /**
@@ -141,7 +142,7 @@ const useRoleCheck = () => {
    * @returns {boolean} - True if user can view all security incidents
    */
   const canViewAllIncidents = () => {
-    return isAdmin() || isSuperUser() || isSupervisor();
+    return isAdmin() || isSuperUser() || isStandardUser();
   };
 
   /**

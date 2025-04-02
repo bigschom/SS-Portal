@@ -1,11 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import db from '../config/postgres-service';
 
 const AuthContext = createContext(null);
 
@@ -50,14 +45,10 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      // First check user exists
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .single();
+      // Get the user from database
+      const userData = await db.getUserByUsername(username);
 
-      if (userError) {
+      if (!userData) {
         // User not found, return generic error
         return { 
           user: null, 
@@ -87,13 +78,7 @@ export const AuthProvider = ({ children }) => {
 
         if (tempPasswordValid) {
           // Reset failed login attempts on successful login
-          await supabase
-            .from('users')
-            .update({ 
-              failed_login_attempts: 0,
-              last_login: new Date().toISOString() 
-            })
-            .eq('id', userData.id);
+          await db.updateLastLogin(userData.id);
             
           // Use only role for role
           const userWithRole = {
@@ -118,14 +103,7 @@ export const AuthProvider = ({ children }) => {
         
         // Deactivate account if max attempts reached
         if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
-          await supabase
-            .from('users')
-            .update({ 
-              failed_login_attempts: newAttempts,
-              is_active: false,
-              locked_at: new Date().toISOString()
-            })
-            .eq('id', userData.id);
+          await db.lockUserAccount(userData.id);
             
           return { 
             user: null, 
@@ -136,10 +114,7 @@ export const AuthProvider = ({ children }) => {
         }
         
         // Update failed attempts
-        await supabase
-          .from('users')
-          .update({ failed_login_attempts: newAttempts })
-          .eq('id', userData.id);
+        await db.updateUserLoginAttempts(userData.id, newAttempts);
           
         return { 
           user: null, 
@@ -157,14 +132,7 @@ export const AuthProvider = ({ children }) => {
         
         // Deactivate account if max attempts reached
         if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
-          await supabase
-            .from('users')
-            .update({ 
-              failed_login_attempts: newAttempts,
-              is_active: false,
-              locked_at: new Date().toISOString()
-            })
-            .eq('id', userData.id);
+          await db.lockUserAccount(userData.id);
             
           return { 
             user: null, 
@@ -175,10 +143,7 @@ export const AuthProvider = ({ children }) => {
         }
         
         // Update failed attempts
-        await supabase
-          .from('users')
-          .update({ failed_login_attempts: newAttempts })
-          .eq('id', userData.id);
+        await db.updateUserLoginAttempts(userData.id, newAttempts);
           
         return { 
           user: null, 
@@ -187,22 +152,13 @@ export const AuthProvider = ({ children }) => {
         };
       }
 
-      // Reset failed login attempts on successful login
-      // Update last login
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ 
-          failed_login_attempts: 0,
-          last_login: new Date().toISOString() 
-        })
-        .eq('id', userData.id);
+      // Reset failed login attempts on successful login and update last login
+      const updatedUser = await db.updateLastLogin(userData.id);
 
-      if (updateError) console.error('Error updating last login:', updateError);
-
-      // Use only role for role
+      // Use only specific role
       const userWithRole = {
-        ...userData,
-        role: userData.role,
+        ...updatedUser,
+        role: updatedUser.role,
         failed_login_attempts: 0
       };
 
@@ -211,6 +167,8 @@ export const AuthProvider = ({ children }) => {
       
       // Start the auto-logout timer
       resetLogoutTimer();
+
+      setUser(userWithRole);
 
       return { 
         user: userWithRole, 
@@ -229,30 +187,10 @@ export const AuthProvider = ({ children }) => {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          password: hashedPassword,
-          temp_password: null,
-          temp_password_expires: null,
-          password_change_required: false,
-          failed_login_attempts: 0, // Reset failed attempts when password is changed
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
+      // Update the password in the database
+      const updatedUser = await db.updatePassword(userId, hashedPassword);
 
-      if (updateError) throw updateError;
-
-      // Fetch updated user information
-      const { data: updatedUser, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Use only role for role
+      // Use only valid roles
       const updatedUserWithRole = {
         ...updatedUser,
         role: updatedUser.role
@@ -274,17 +212,10 @@ export const AuthProvider = ({ children }) => {
 
   const unlockAccount = async (userId) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          is_active: true,
-          failed_login_attempts: 0,
-          locked_at: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      if (error) throw error;
+      const adminId = user?.id;
+      if (!adminId) throw new Error("You must be logged in to unlock accounts");
+      
+      await db.unlockUserAccount(userId, adminId);
       return { error: null };
     } catch (error) {
       console.error('Error unlocking account:', error);
