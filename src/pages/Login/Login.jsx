@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Moon, Sun, User, Lock, AlertCircle, Loader2, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '../../config/supabase';
+import db from '../config/postgres-service';
 import { getRoleBasedDashboard } from '../../utils/roleRoutes';
 
 // Password Change Modal Component
