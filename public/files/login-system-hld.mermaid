@@ -1,0 +1,38 @@
+graph TD
+    User[User] -->|1. Enters credentials| LoginUI[Login Page UI]
+    LoginUI -->|2. Submits credentials| AuthProvider[Auth Provider]
+    AuthProvider -->|3. Validates credentials| APIService[API Service]
+    APIService -->|4. HTTP Request| Server[Server API]
+    Server -->|5. Authenticates user| Database[(Database)]
+    Database -->|6. Returns user data| Server
+    Server -->|7. Returns JWT token| APIService
+    APIService -->|8. Returns auth result| AuthProvider
+    AuthProvider -->|9. Updates state & storage| SessionStorage[(Session Storage)]
+    AuthProvider -->|10a. Success| Dashboard[User Dashboard]
+    AuthProvider -->|10b. Temp password| PasswordChange[Password Change Modal]
+    AuthProvider -->|10c. Failure| LoginUI
+    PasswordChange -->|11. Updates password| AuthProvider
+    
+    subgraph "Frontend"
+        LoginUI
+        AuthProvider
+        APIService
+        Dashboard
+        PasswordChange
+        SessionStorage
+    end
+    
+    subgraph "Backend"
+        Server
+        Database
+    end
+    
+    classDef frontend fill:#d4f1f9,stroke:#05728f;
+    classDef backend fill:#ffe6cc,stroke:#d79b00;
+    classDef storage fill:#e1d5e7,stroke:#9673a6;
+    classDef user fill:#d5e8d4,stroke:#82b366;
+    
+    class LoginUI,AuthProvider,APIService,Dashboard,PasswordChange frontend;
+    class Server backend;
+    class Database,SessionStorage storage;
+    class User user;

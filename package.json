@@ -15,14 +15,20 @@
         "@radix-ui/react-slot": "^1.0.2",
         "@supabase/supabase-js": "^2.39.0",
         "@tanstack/react-query": "^4.36.1",
+        "axios": "^1.8.4",
         "bcryptjs": "^2.4.3",
+        "chart.js": "^4.4.8",
         "class-variance-authority": "^0.7.0",
         "clsx": "^2.1.0",
+        "cookie-parser": "^1.4.7",
+        "cors": "^2.8.5",
         "date-fns": "^2.30.0",
         "dotenv": "^16.4.7",
+        "express": "^5.1.0",
         "framer-motion": "^11.0.3",
         "html2canvas": "^1.4.1",
         "html2pdf.js": "^0.10.3",
+        "jsonwebtoken": "^9.0.2",
         "jspdf": "^2.5.1",
         "lucide-react": "^0.309.0",
         "next-themes": "^0.2.1",
@@ -30,9 +36,11 @@
         "pdf-lib": "^1.17.1",
         "pg": "^8.14.1",
         "react": "^18.2.0",
+        "react-chartjs-2": "^5.3.0",
         "react-datepicker": "^4.25.0",
         "react-dom": "^18.2.0",
         "react-router-dom": "^6.20.0",
+        "react-toastify": "^11.0.5",
         "recharts": "^2.10.3",
         "tailwind-merge": "^2.2.0",
         "tesseract.js": "^4.1.1",
@@ -56,5 +64,18 @@
         "vite": "^5.0.0",
         "webpack": "^5.98.0",
         "webpack-cli": "^6.0.1"
-    }
+    },
+    "main": "postcss.config.js",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/bigschom/SS-Portal.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/bigschom/SS-Portal/issues"
+    },
+    "homepage": "https://github.com/bigschom/SS-Portal#readme",
+    "description": ""
 }

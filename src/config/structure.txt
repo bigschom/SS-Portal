@@ -1,0 +1,15 @@
+src/
+├── config/
+│   ├── server.js (main entry point)
+│   ├── db/
+│   │   └── index.js (database connection and utilities)
+│   ├── middleware/
+│   │   ├── auth.js (authentication middleware)
+│   │   └── index.js (exports all middleware)
+│   └── routes/
+│       ├── auth.js (auth routes)
+│       ├── users.js (user routes)
+│       ├── backgroundChecks.js (background check routes)
+│       ├── departments.js (department routes)
+│       ├── stakeholderRequests.js (stakeholder request routes)
+│       └── index.js (combines and exports all routes)

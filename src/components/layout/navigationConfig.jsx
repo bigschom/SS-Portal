@@ -1,116 +1,194 @@
-import { LayoutDashboard, UserCog, MessageSquare, GraduationCap, UserCheck, FileText, Edit, BarChart, ClipboardList } from 'lucide-react';
+import { 
+  Home, 
+  Users, 
+  Shield, 
+  FileCheck, 
+  Briefcase, 
+  AlertTriangle, 
+  Lock, 
+  BarChart3, 
+  Calendar, 
+  Upload, 
+  Search, 
+  ClipboardList, 
+  Bell, 
+  Bookmark,
+  Wrench,
+  FileText,
+  List,
+  BookOpen,
+  CheckSquare
+} from 'lucide-react';
 
 export const roleBasedNavigation = {
   admin: [
     { 
       name: 'Dashboard', 
       path: '/admindashboard', 
-      icon: LayoutDashboard 
+      icon: Home 
     },
 
     {
       name: 'User Management',
       path: '/user-management',
-      icon: UserCog
+      icon: Users
     },
+
     {
-      name: 'Internship Overview',
-      icon: UserCheck,
+      name: 'Background Checks',
+      icon: Shield,
       children: [
         {
-          name: 'New Internship',
-          path: '/newbackground',
-          icon: FileText
+          name: 'New Request',
+          path: '/new-request',
+          icon: FileCheck
         },
         {
-          name: 'Update Internship',
-          path: '/updatebackground',
-          icon: Edit
-        },
-        {
-          name: 'Internship Overview',
+          name: 'Intership Overview',
           path: '/internshipoverview',
-          icon: GraduationCap
+          icon: Briefcase
+        },
+        {
+          name: 'All Request',
+          path: '/all-background-checks',
+          icon: List
         },
       ]
     },
     {
-      name: 'Reports',
-      icon: BarChart,
+      name: 'Stake Holder request',
+      icon: Users,
       children: [
-        { name: 'Guard Shift Report', path: '/GuardShiftReport', icon: BarChart }
+        {
+          name: 'New Request',
+          path: '/new-stake-holder-request',
+          icon: FileCheck
+        },
+        {
+          name: 'All Request',
+          path: '/all-stake-holder-request',
+          icon: List
+        },
+      ]
+    },
+
+    {
+      name: 'Reports',
+      icon: BarChart3,
+      children: [
+        { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
+        { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
       ]
     },
     {
-      name: 'Contact Support',
-      path: '/contact',
-      icon: MessageSquare
-    }
+      name: 'UpComing',
+      icon: Calendar,
+      children: [
+        { name: 'Equipment Movement Log book', path: '/stakeholderreport', icon: Wrench },
+        { name: 'Cleaner Profile Book', path: '/backgroundcheckreport', icon: BookOpen },
+        { name: 'Security Technical Issue Book', path: '/GuardShiftReport', icon: Bell },
+        {
+          name: 'Fraud Case',
+          icon: AlertTriangle,
+          children: [
+            {
+              name: 'Upload Page',
+              path: '/#',
+              icon: Upload
+            },
+            {
+              name: 'Search Page',    
+              path: '/#',
+              icon: Search
+            },
+          ]
+        },
+        {
+          name: 'Security Services',
+          icon: Lock,
+          children: [
+            {
+              name: 'New Request',
+              path: '/#',
+              icon: FileCheck
+            },
+            {
+              name: 'Tasks',    
+              path: '//#',
+              icon: CheckSquare
+            },
+          ]
+        },
+        {
+          name: 'Reports',
+          icon: BarChart3,
+          children: [
+            { name: 'Security Services Report', path: '/#', icon: FileText },
+          ]
+        }
+      ]
+    },
   ],
-  manager: [
+  superuser: [
     { 
       name: 'Dashboard', 
-      path: '/managerdashboard', 
-      icon: LayoutDashboard 
+      path: '/userdashboard', 
+      icon: Home 
     },
     {
       name: 'Reports',
-      icon: BarChart,
+      icon: BarChart3,
       children: [
-        { name: 'Guard Shift Report', path: '/GuardShiftReport', icon: BarChart }
+        { name: 'Guard Shift Report', path: '/GuardShiftReport', icon: FileText }
       ]
     }
   ],
-  supervisor: [
+  standarduser: [
     { 
       name: 'Dashboard', 
-      path: '/supervisordashboard', 
-      icon: LayoutDashboard 
+      path: '/userdashboard', 
+      icon: Home 
     },
     {
-      name: 'Internship Overview',
-      path: '/internshipoverview',
-      icon: GraduationCap
-    }
+      name: 'New Request',
+      path: '/new-request',
+      icon: FileCheck
+    },
+    {
+      name: 'All Request',
+      path: '/all-background-checks',
+      icon: List
+    },
+    { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
   ],
   security_guard: [
     { 
       name: 'Dashboard', 
-      path: '/securityguarddashboard', 
-      icon: LayoutDashboard 
+      path: '/userdashboard', 
+      icon: Home 
     }
   ],
   user: [
     { 
       name: 'Dashboard', 
       path: '/userdashboard', 
-      icon: LayoutDashboard 
+      icon: Home 
     },
-    {
-      name: 'Internship Overview',
-      path: '/internshipoverview',
-      icon: GraduationCap
-    }
   ],
 
   user1: [
     { 
       name: 'Dashboard', 
       path: '/userdashboard', 
-      icon: LayoutDashboard 
+      icon: Home 
     },
-    {
-      name: 'Internship Overview',
-      path: '/internshipoverview',
-      icon: GraduationCap
-    }
   ],
 
   user2: [
     { 
       name: 'Dashboard', 
       path: '/userdashboard', 
-      icon: LayoutDashboard 
+      icon: Home 
     }
   ]
 };
@@ -120,10 +198,10 @@ export const getRoleDisplayName = (role) => {
   switch(role) {
     case 'admin':
       return 'Administrator';
-    case 'manager':
-      return 'Manager';
-    case 'supervisor':
-      return 'Supervisor';
+    case 'superuser':
+      return 'superuser';
+    case 'standarduser':
+      return 'standarduser';
     case 'security_guard':
       return 'Security Guard';
     case 'user':

@@ -1,0 +1,85 @@
+classDiagram
+    class LoginPage {
+        -username: string
+        -password: string
+        -error: string
+        -isLoading: boolean
+        -showPasswordChange: boolean
+        -showSuccessModal: boolean
+        -tempUser: object
+        -toast: object
+        +handleLogin()
+        +handlePasswordChange()
+        +showToast()
+        +sanitizeInput()
+    }
+
+    class AuthProvider {
+        -user: object
+        -loading: boolean
+        -tokenExpirationChecked: ref
+        -logoutTimer: ref
+        -lastActivityTime: ref
+        +login()
+        +logout()
+        +updatePassword()
+        +updateTempPassword()
+        +unlockAccount()
+        +resetLogoutTimer()
+        +checkTokenExpiration()
+        +updateActivityTime()
+    }
+
+    class PasswordChangeModal {
+        -newPassword: string
+        -confirmPassword: string
+        -error: string
+        -isSubmitting: boolean
+        -passwordStrength: number
+        -validationResults: object
+        +handleSubmit()
+        +validatePassword()
+        +getStrengthColor()
+    }
+
+    class SuccessModal {
+        +onClose()
+    }
+
+    class Toast {
+        -type: string
+        -message: string
+        -visible: boolean
+        +getIcon()
+        +getBackgroundColor()
+    }
+
+    class APIService {
+        +login()
+        +updatePassword()
+        +unlockAccount()
+        +checkSession()
+        +trackActivity()
+    }
+
+    class Server {
+        +login()
+        +updatePassword()
+        +unlockAccount()
+        +trackActivity()
+        +checkInactiveAccounts()
+    }
+
+    class Database {
+        +users
+        +query()
+    }
+
+    LoginPage --> AuthProvider: uses
+    LoginPage --> PasswordChangeModal: renders
+    LoginPage --> SuccessModal: renders
+    LoginPage --> Toast: shows
+    AuthProvider --> APIService: calls
+    APIService --> Server: HTTP requests
+    Server --> Database: queries
+    PasswordChangeModal --> AuthProvider: calls updatePassword

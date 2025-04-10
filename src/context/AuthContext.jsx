@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { supabase } from '../config/supabase';
+import apiService from '../config/api-service';
 
 const AuthContext = createContext();
 
@@ -13,34 +13,30 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Check active session
+    // Check if user is stored in localStorage
     const checkUser = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const storedUser = localStorage.getItem('user');
         
-        if (session?.user) {
-          // Get the user profile data
-          const { data, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('auth_id', session.user.id)
-            .single();
-            
-          if (error) throw error;
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
           
-          setUser({
-            id: session.user.id,
-            email: session.user.email,
-            username: data.username,
-            full_name: data.full_name,
-            role: data.role,
-            ...data
-          });
+          // Verify the token is still valid by making an authenticated request
+          try {
+            // You could add a /api/auth/verify endpoint or use an existing authenticated endpoint
+            await apiService.users.getUserById(userData.id);
+            setUser(userData);
+          } catch (err) {
+            // If token is invalid, clear the stored user
+            console.error('Stored token is invalid:', err);
+            localStorage.removeItem('user');
+            setUser(null);
+          }
         } else {
           setUser(null);
         }
       } catch (err) {
-        console.error('Error fetching auth user:', err);
+        console.error('Error checking auth user:', err);
         setError(err.message);
         setUser(null);
       } finally {
@@ -49,55 +45,38 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkUser();
-
-    // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        // Get the user profile data
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('auth_id', session.user.id)
-          .single();
-          
-        if (error) {
-          console.error('Error fetching user data:', error);
-          setUser(null);
-          return;
-        }
-        
-        setUser({
-          id: session.user.id,
-          email: session.user.email,
-          username: data.username,
-          full_name: data.full_name,
-          role: data.role,
-          ...data
-        });
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
-
-    return () => {
-      if (authListener && authListener.subscription) {
-        authListener.subscription.unsubscribe();
-      }
-    };
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (username, password) => {
     try {
       setError(null);
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
+      const result = await apiService.auth.login(username, password);
       
-      return { success: true, data };
+      if (result.error) {
+        setError(result.error);
+        return { 
+          success: false, 
+          error: result.error,
+          attemptsLeft: result.attemptsLeft,
+          accountInactive: result.accountInactive,
+          accountLocked: result.accountLocked,
+          passwordChangeRequired: result.passwordChangeRequired,
+          user: result.user
+        };
+      }
+      
+      // If login successful and no password change required, store user
+      if (result.user && !result.passwordChangeRequired) {
+        localStorage.setItem('user', JSON.stringify(result.user));
+        setUser(result.user);
+      }
+      
+      return { 
+        success: true, 
+        user: result.user,
+        passwordChangeRequired: result.passwordChangeRequired
+      };
     } catch (err) {
       setError(err.message);
       return { success: false, error: err.message };
@@ -107,8 +86,8 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       setError(null);
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      // No need to call API for logout, just clear local storage
+      localStorage.removeItem('user');
       setUser(null);
       return { success: true };
     } catch (err) {
@@ -119,17 +98,12 @@ export const AuthProvider = ({ children }) => {
 
   const unlockAccount = async (userId) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ 
-          locked_at: null,
-          failed_login_attempts: 0,
-          updated_by: user.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      if (error) throw error;
+      const result = await apiService.auth.unlockAccount(userId);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
       return { success: true };
     } catch (error) {
       console.error('Error unlocking account:', error);
@@ -137,13 +111,36 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updatePassword = async (userId, newPassword) => {
+    try {
+      const result = await apiService.auth.updatePassword(userId, newPassword);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // If password update successful, update user in state and localStorage
+      if (result.user) {
+        setUser(result.user);
+        localStorage.setItem('user', JSON.stringify(result.user));
+      }
+      
+      return { success: true, updatedUser: result.user };
+    } catch (error) {
+      console.error('Error updating password:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const value = {
     user,
+    setUser,
     loading,
     error,
     login,
     logout,
-    unlockAccount
+    unlockAccount,
+    updatePassword
   };
 
   return (
