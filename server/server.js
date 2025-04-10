@@ -1,0 +1,742 @@
+// server/server.js
+import express from 'express';
+import cors from 'cors';
+import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
+import { query } from './db.js';
+import { initializeTables } from './db-init.js';
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
+app.use(express.json());
+app.use(cookieParser());
+
+// Initialize database tables on server start
+(async () => {
+  try {
+    await initializeTables();
+    console.log('Database tables initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize database tables:', error);
+  }
+})();
+
+// Constants
+const MAX_LOGIN_ATTEMPTS = 5;
+const TOKEN_EXPIRATION = 60 * 60; // 1 hour
+const ACCOUNT_INACTIVE_DAYS = 30; // Mark account as inactive after 30 days
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) return res.status(401).json({ error: 'Access denied' });
+  
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
+
+// Check for inactive accounts scheduled task
+const checkInactiveAccounts = async () => {
+  try {
+    const inactiveDaysAgo = new Date();
+    inactiveDaysAgo.setDate(inactiveDaysAgo.getDate() - ACCOUNT_INACTIVE_DAYS);
+    
+    // Get users who haven't logged in for 30+ days and are still active
+    const result = await query(
+      `UPDATE users 
+       SET is_active = false, 
+           updated_at = NOW(),
+           updated_by = NULL
+       WHERE (last_login IS NULL OR last_login < $1)
+         AND is_active = true
+       RETURNING id, username`,
+      [inactiveDaysAgo.toISOString()]
+    );
+    
+    if (result.rows.length > 0) {
+      console.log(`Marked ${result.rows.length} accounts as inactive due to inactivity:`, 
+        result.rows.map(user => user.username).join(', '));
+    }
+  } catch (error) {
+    console.error('Error checking for inactive accounts:', error);
+  }
+};
+
+// Run inactive account check daily
+setInterval(checkInactiveAccounts, 24 * 60 * 60 * 1000);
+// Also run it once at startup
+checkInactiveAccounts();
+
+// AUTH ROUTES
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  
+  try {
+    // Get user from database
+    const result = await query('SELECT * FROM users WHERE username = $1', [username]);
+    const userData = result.rows[0];
+    
+    if (!userData) {
+      // User not found, return generic error
+      return res.json({ 
+        error: 'Invalid credentials',
+        attemptsLeft: null
+      });
+    }
+    
+    // Check if account is inactive due to 30 days of inactivity
+    if (!userData.is_active && userData.locked_at === null) {
+      return res.json({ 
+        error: 'Your account has been deactivated due to inactivity. Please contact an administrator.',
+        accountInactive: true,
+        accountDeactivated: true,
+        attemptsLeft: 0
+      });
+    }
+    
+    // Check if account is locked due to failed attempts
+    if (!userData.is_active && userData.locked_at !== null) {
+      return res.json({ 
+        error: 'Account is locked due to too many failed login attempts. Please contact an administrator.',
+        accountInactive: true,
+        accountLocked: true,
+        attemptsLeft: 0
+      });
+    }
+    
+    // Check failed login attempts
+    const currentAttempts = userData.failed_login_attempts || 0;
+    
+    // First check if there's a valid temporary password
+    let isValidTempPassword = false;
+    
+    if (userData.temp_password && new Date(userData.temp_password_expires) > new Date()) {
+      // Use bcrypt to compare the provided password with the hashed temp password
+      isValidTempPassword = await bcrypt.compare(password, userData.temp_password);
+    }
+    
+    if (isValidTempPassword) {
+      console.log('User logged in with temporary password, password change required');
+      
+      // Reset failed login attempts on successful login
+      await query(
+        'UPDATE users SET failed_login_attempts = 0, last_login = NOW() WHERE id = $1 RETURNING *',
+        [userData.id]
+      );
+      
+      // Create JWT token
+      const token = jwt.sign({ id: userData.id, role: userData.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      
+      // Send user data with token
+      const userWithRole = {
+        id: userData.id,
+        username: userData.username,
+        role: userData.role,
+        is_active: userData.is_active,
+        token
+      };
+      
+      return res.json({ 
+        user: userWithRole, 
+        error: null, 
+        passwordChangeRequired: true  
+      });
+    }
+    
+    // If no valid temp password, check regular password
+    // Before comparing passwords, ensure both are strings
+    const passwordToCheck = String(password);
+    const hashedPassword = String(userData.password);
+    const isValidPassword = await bcrypt.compare(passwordToCheck, hashedPassword);
+    
+    if (!isValidPassword) {
+      // Increment failed login attempts
+      const newAttempts = currentAttempts + 1;
+      const attemptsLeft = MAX_LOGIN_ATTEMPTS - newAttempts;
+      
+      // Deactivate account if max attempts reached
+      if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+        await query(
+          'UPDATE users SET failed_login_attempts = $1, is_active = false, locked_at = NOW() WHERE id = $2',
+          [MAX_LOGIN_ATTEMPTS, userData.id]
+        );
+        
+        return res.json({ 
+          error: 'Account has been locked due to too many failed login attempts. Please contact an administrator.',
+          accountLocked: true,
+          attemptsLeft: 0
+        });
+      }
+      
+      // Update failed attempts
+      await query(
+        'UPDATE users SET failed_login_attempts = $1 WHERE id = $2',
+        [newAttempts, userData.id]
+      );
+      
+      return res.json({ 
+        error: `Invalid credentials. ${attemptsLeft} login ${attemptsLeft === 1 ? 'attempt' : 'attempts'} remaining.`,
+        attemptsLeft
+      });
+    }
+    
+    // Reset failed login attempts on successful login and update last login
+    const updateResult = await query(
+      'UPDATE users SET failed_login_attempts = 0, last_login = NOW(), last_activity = NOW() WHERE id = $1 RETURNING *',
+      [userData.id]
+    );
+    const updatedUser = updateResult.rows[0];
+    
+    // Create JWT token with expiration
+    const token = jwt.sign(
+      { id: updatedUser.id, role: updatedUser.role }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: TOKEN_EXPIRATION }
+    );
+    
+    // Send user data with token
+    const userWithRole = {
+      id: updatedUser.id,
+      username: updatedUser.username,
+      role: updatedUser.role,
+      is_active: updatedUser.is_active,
+      token
+    };
+    
+    return res.json({ 
+      user: userWithRole, 
+      error: null, 
+      passwordChangeRequired: false
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Add a session check endpoint
+app.get('/api/auth/check-session', authenticateToken, (req, res) => {
+  // If the middleware passes, the token is valid
+  return res.json({ valid: true });
+});
+
+app.post('/api/auth/update-password', authenticateToken, async (req, res) => {
+  const { userId, newPassword } = req.body;
+  
+  console.log('Server received password update request:', { userId, passwordLength: newPassword?.length });
+  
+  // Verify the user has permission to update this password
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Not authorized to update this password' });
+  }
+  
+  try {
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    
+    console.log('Password hashed successfully, updating database');
+    
+    // Update the password and clear temporary password fields
+    const result = await query(
+      'UPDATE users SET password = $1, temp_password = NULL, temp_password_expires = NULL, password_change_required = false, failed_login_attempts = 0, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [hashedPassword, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      console.error('User not found for ID:', userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const updatedUser = result.rows[0];
+    console.log('Password updated successfully for user:', updatedUser.username);
+    
+    // Create new token
+    const token = jwt.sign({ id: updatedUser.id, role: updatedUser.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    
+    // Return updated user info
+    const userWithRole = {
+      id: updatedUser.id,
+      username: updatedUser.username,
+      role: updatedUser.role,
+      is_active: updatedUser.is_active,
+      token
+    };
+    
+    return res.json({ user: userWithRole, error: null });
+  } catch (error) {
+    console.error('Password update error:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+app.post('/api/auth/unlock-account', authenticateToken, async (req, res) => {
+  const { userId } = req.body;
+  
+  // Only admin can unlock accounts
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Not authorized to unlock accounts' });
+  }
+  
+  try {
+    const result = await query(
+      'UPDATE users SET is_active = true, failed_login_attempts = 0, locked_at = NULL, updated_by = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [req.user.id, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    return res.json({ success: true, error: null });
+  } catch (error) {
+    console.error('Error unlocking account:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Track user activity
+app.post('/api/auth/track-activity', authenticateToken, async (req, res) => {
+  try {
+    await query(
+      'UPDATE users SET last_activity = NOW() WHERE id = $1',
+      [req.user.id]
+    );
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking user activity:', error);
+    return res.json({ success: false });
+  }
+});
+
+// USER ROUTES
+app.get('/api/users/active', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT id, username, full_name, role, last_login, is_active, failed_login_attempts, locked_at, created_at, updated_at FROM users WHERE is_active = true ORDER BY username',
+      []
+    );
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching active users:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/users/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const result = await query(
+      'SELECT id, username, full_name, role, last_login, is_active FROM users WHERE id = $1',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/users', authenticateToken, async (req, res) => {
+  const { username, full_name, role, is_active, tempPassword, created_by } = req.body;
+  
+  try {
+    // Hash the temporary password
+    const salt = await bcrypt.genSalt(10);
+    const hashedTempPassword = await bcrypt.hash(tempPassword, salt);
+    
+    // Calculate expiration time (24 hours)
+    const tempPasswordExpires = new Date();
+    tempPasswordExpires.setHours(tempPasswordExpires.getHours() + 24);
+    
+    const result = await query(
+      `INSERT INTO users (username, full_name, role, is_active, temp_password, 
+        temp_password_expires, password_change_required, created_by, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
+      [username, full_name, role, is_active, hashedTempPassword, tempPasswordExpires, true, created_by]
+    );
+    
+    return res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT id, username, full_name, role, last_login, is_active, failed_login_attempts, locked_at, created_at, updated_at FROM users ORDER BY username',
+      []
+    );
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/auth/update-temp-password', authenticateToken, async (req, res) => {
+  const { userId, newPassword } = req.body;
+  
+  console.log('Server received temp password update request:', { userId, passwordLength: newPassword?.length });
+  
+  try {
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    
+    console.log('Temporary password hashed successfully, updating database');
+    
+    // Update the password
+    const result = await query(
+      'UPDATE users SET temp_password = $1, temp_password_expires = NOW() + INTERVAL \'24 hours\', updated_at = NOW() WHERE id = $2 RETURNING *',
+      [hashedPassword, userId]
+    );
+    
+    if (result.rows.length === 0) {
+      console.error('User not found for ID:', userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const updatedUser = result.rows[0];
+    console.log('Temporary password updated successfully for user:', updatedUser.username);
+    
+    // Create new token
+    const token = jwt.sign({ id: updatedUser.id, role: updatedUser.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    
+    // Return updated user info
+    const userWithRole = {
+      id: updatedUser.id,
+      username: updatedUser.username,
+      role: updatedUser.role,
+      is_active: updatedUser.is_active,
+      token
+    };
+    
+    return res.json({ user: userWithRole, error: null });
+  } catch (error) {
+    console.error('Temp password update error:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
+  
+  const { id } = req.params;
+  const { username, full_name, role, is_active, updated_by } = req.body;
+  
+  try {
+    const result = await query(
+      `UPDATE users SET username = $1, full_name = $2, role = $3, is_active = $4,
+       updated_by = $5, updated_at = NOW() WHERE id = $6 RETURNING *`,
+      [username, full_name, role, is_active, updated_by, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+app.post('/api/users/:id/reset-password', authenticateToken, async (req, res) => {
+  
+  const { id } = req.params;
+  const { tempPassword, updated_by } = req.body;
+  
+  try {
+    // Hash the temporary password
+    const salt = await bcrypt.genSalt(10);
+    const hashedTempPassword = await bcrypt.hash(tempPassword, salt);
+    
+    // Calculate expiration time (24 hours)
+    const tempPasswordExpires = new Date();
+    tempPasswordExpires.setHours(tempPasswordExpires.getHours() + 24);
+    
+    const result = await query(
+      `UPDATE users SET temp_password = $1, temp_password_expires = $2, 
+              password_change_required = true, updated_by = $3, updated_at = NOW() 
+       WHERE id = $4 RETURNING *`,
+      [hashedTempPassword, tempPasswordExpires, updated_by, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+  
+  const { id } = req.params;
+  
+  try {
+    const result = await query(
+      'DELETE FROM users WHERE id = $1 RETURNING id',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DEPARTMENT ROUTES
+app.get('/api/departments/active', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT id, name FROM departments WHERE status = $1 ORDER BY name',
+      ['active']
+    );
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching departments:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// BACKGROUND CHECKS ROUTES - IMPORTANT: Order matters for route definitions!
+
+// Search endpoint - must come BEFORE the /:id route
+app.get('/api/background-checks/search-by-id', authenticateToken, async (req, res) => {
+  const searchTerm = req.query.query;
+  
+  if (!searchTerm) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+  
+  try {
+    // Use text-based search without joining with departments table
+    const result = await query(
+      `SELECT * FROM background_checks
+       WHERE CAST(id_passport_number AS TEXT) ILIKE $1
+       ORDER BY submitted_date DESC`,
+      [`%${searchTerm}%`]
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error searching background checks:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get all internships
+app.get('/api/background-checks/internships', authenticateToken, async (req, res) => {
+  try {
+    const { status, startDate, endDate } = req.query;
+    
+    let queryStr = `
+      SELECT * FROM background_checks
+      WHERE role_type = 'Internship'
+    `;
+    
+    const queryParams = [];
+    let paramCount = 1;
+    
+    // Apply filters
+    if (startDate) {
+      queryStr += ` AND date_start >= $${paramCount}`;
+      queryParams.push(startDate);
+      paramCount++;
+    }
+    
+    if (endDate) {
+      queryStr += ` AND date_end <= $${paramCount}`;
+      queryParams.push(endDate);
+      paramCount++;
+    }
+    
+    const currentDate = new Date().toISOString().split('T')[0];
+    if (status === 'active') {
+      queryStr += ` AND date_end >= $${paramCount}`;
+      queryParams.push(currentDate);
+      paramCount++;
+    } else if (status === 'expired') {
+      queryStr += ` AND date_end < $${paramCount}`;
+      queryParams.push(currentDate);
+      paramCount++;
+    }
+    
+    queryStr += ` ORDER BY date_start DESC`;
+    
+    const result = await query(queryStr, queryParams);
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching internships:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// Get unique requesters
+app.get('/api/background-checks/requesters', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT DISTINCT requested_by FROM background_checks WHERE requested_by IS NOT NULL AND requested_by != \'\' ORDER BY requested_by'
+    );
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching requesters:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/background-checks/citizenships', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      'SELECT DISTINCT citizenship FROM background_checks WHERE citizenship IS NOT NULL AND citizenship != \'\' ORDER BY citizenship'
+    );
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching citizenships:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Check for duplicate ID
+app.get('/api/background-checks/check-id/:idNumber', authenticateToken, async (req, res) => {
+  const { idNumber } = req.params;
+  
+  try {
+    const result = await query(
+      'SELECT EXISTS(SELECT 1 FROM background_checks WHERE id_passport_number = $1)',
+      [idNumber]
+    );
+    
+    return res.json({ exists: result.rows[0].exists });
+  } catch (error) {
+    console.error('Error checking duplicate ID:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get all background checks
+app.get('/api/background-checks', authenticateToken, async (req, res) => {
+  try {
+    // Extract filter parameters
+    const { 
+      role, 
+      department, 
+      status, 
+      citizenship, 
+      requestedBy, 
+      startDate, 
+      endDate, 
+      search,
+      sortKey,
+      sortDirection
+    } = req.query;
+    
+    // Start building the query
+    let queryText = 'SELECT bg.*, d.name as department_name, r.name as role_name, r.type as role_type FROM background_checks bg LEFT JOIN departments d ON bg.department_id = d.id LEFT JOIN roles r ON bg.role_id = r.id WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+    
+    // Add filters to the query
+    if (role) {
+      queryText += ` AND bg.role_id = $${paramIndex}`;
+      params.push(role);
+      paramIndex++;
+    }
+    
+    if (department) {
+      queryText += ` AND bg.department_id = $${paramIndex}`;
+      params.push(department);
+      paramIndex++;
+    }
+    
+    if (status) {
+      queryText += ` AND bg.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+    
+    if (citizenship) {
+      queryText += ` AND bg.citizenship = $${paramIndex}`;
+      params.push(citizenship);
+      paramIndex++;
+    }
+    
+    if (requestedBy) {
+      queryText += ` AND bg.requested_by = $${paramIndex}`;
+      params.push(requestedBy);
+      paramIndex++;
+    }
+    
+    if (startDate) {
+      queryText += ` AND bg.submitted_date >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+    
+    if (endDate) {
+      queryText += ` AND bg.submitted_date <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+    
+    if (search) {
+      queryText += ` AND bg.full_names ILIKE $${paramIndex}`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    // Add sorting
+    if (sortKey) {
+      const validSortKeys = ['full_names', 'citizenship', 'department_name', 'role_name', 'status', 'submitted_date', 'requested_by'];
+      const key = validSortKeys.includes(sortKey) ? sortKey : 'submitted_date';
+      const direction = sortDirection === 'asc' ? 'ASC' : 'DESC';
+      
+      queryText += ` ORDER BY ${key} ${direction}`;
+    } else {
+      queryText += ' ORDER BY bg.submitted_date DESC';
+    }
+    
+    const result = await query(queryText, params);
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching background checks:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
