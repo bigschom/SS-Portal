@@ -8,17 +8,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import { getRoleBasedDashboard } from '../../utils/roleRoutes';
 
-// Toast Notification Component
+// Toast Notification Component - Moved to bottom
 const Toast = ({ type, message, onClose }) => {
   return (
     <motion.div
-      initial={{ opacity: 0, y: -50 }}
+      initial={{ opacity: 0, y: 50 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -50 }}
-      className={`fixed top-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg ${
-        type === 'success' ? 'bg-green-500' : 
+      exit={{ opacity: 0, y: 50 }}
+      className={`fixed bottom-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg ${
+        type === 'success' ? 'bg-[#0A2647]' : 
         type === 'error' ? 'bg-red-500' : 
-        type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
+        type === 'warning' ? 'bg-[#0A2647]' : 'bg-[#0A2647]'
       }`}
     >
       <div className="flex items-center">
@@ -56,7 +56,7 @@ const SuccessModal = ({ isOpen, onClose }) => {
         transition={{ duration: 0.3 }}
         className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-md w-full mx-4"
       >
-        <div className="flex items-center justify-center mb-4 text-green-500">
+        <div className="flex items-center justify-center mb-4 text-[#0A2647] dark:text-white">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
@@ -73,7 +73,7 @@ const SuccessModal = ({ isOpen, onClose }) => {
         <div className="flex justify-center">
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-[#1e3a8a] hover:bg-[#1e3a8a]/90 dark:bg-white text-white dark:text-black rounded-lg
+            className="px-6 py-2 bg-[#0A2647] hover:bg-[#0A2647]/90 dark:bg-white text-white dark:text-[#0A2647] rounded-lg
                      dark:hover:bg-gray-100 transition-colors transform hover:scale-[1.02]"
           >
             Log In Again
@@ -189,7 +189,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
     }
   };
 
-  // Function to determine strength color
+  // Function to determine strength color - keeping green for password strength
   const getStrengthColor = () => {
     if (passwordStrength === 0) return 'bg-gray-200 dark:bg-gray-700';
     if (passwordStrength === 1) return 'bg-red-500';
@@ -236,12 +236,12 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 
                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                       focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] dark:focus:ring-white"
+                       focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
               required
               autoComplete="new-password"
             />
             
-            {/* Password strength indicator */}
+            {/* Password strength indicator - keeping green colors */}
             <div className="mt-2">
               <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div 
@@ -270,7 +270,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 
                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                       focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] dark:focus:ring-white"
+                       focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
               required
               autoComplete="new-password"
             />
@@ -281,7 +281,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
               <li className="flex items-center gap-1.5">
                 {validationResults.length ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
@@ -289,7 +289,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               </li>
               <li className="flex items-center gap-1.5">
                 {validationResults.uppercase ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
@@ -297,7 +297,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               </li>
               <li className="flex items-center gap-1.5">
                 {validationResults.lowercase ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
@@ -305,7 +305,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               </li>
               <li className="flex items-center gap-1.5">
                 {validationResults.number ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
@@ -313,7 +313,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               </li>
               <li className="flex items-center gap-1.5">
                 {validationResults.special ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
@@ -321,7 +321,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               </li>
               <li className="flex items-center gap-1.5">
                 {validationResults.match ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
                 ) : (
                   <XCircle className="w-4 h-4 text-red-500" />
                 )}
@@ -343,7 +343,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
             <button
               type="submit"
               disabled={isSubmitting || passwordStrength < 4}
-              className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e3a8a]/90 dark:bg-white text-white dark:text-black rounded-lg
+              className="px-4 py-2 bg-[#0A2647] hover:bg-[#0A2647]/90 dark:bg-white text-white dark:text-[#0A2647] rounded-lg
                        dark:hover:bg-gray-100 transition-colors 
                        flex items-center gap-2 disabled:opacity-50 transform hover:scale-[1.02]"
             >
@@ -410,7 +410,7 @@ const LoginPage = () => {
     e.preventDefault();
     
     if (!username || !password) {
-      setError('Please enter both username and password');
+      showToast('error', 'Please enter both username and password');
       return;
     }
     
@@ -432,10 +432,11 @@ const LoginPage = () => {
       } = await login(sanitizedUsername, password);
       
       if (loginError) {
-        setError(loginError);
+        // Show all errors in toast instead of error message in UI
+        showToast('error', loginError);
         setAttemptsLeft(remainingAttempts);
         
-        // Show toast for specific account status issues
+        // Additional toast notifications for specific account status issues
         if (accountLocked) {
           showToast('error', 'Your account is locked due to too many failed attempts. Contact an administrator.');
         } else if (accountDeactivated) {
@@ -475,8 +476,7 @@ const LoginPage = () => {
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('An unexpected error occurred. Please try again.');
-      showToast('error', 'Connection error. Please check your internet connection.');
+      showToast('error', 'An unexpected error occurred. Please try again.');
       setIsLoading(false);
     }
   };
@@ -488,19 +488,18 @@ const LoginPage = () => {
       const userId = tempUser?.id;
       const token = tempUser?.token;
   
-      if (!userId) {
-        setError('User information is missing. Please log in again.');
+      if (!userId || !token) {
+        showToast('error', 'User information is missing. Please log in again.');
         setIsLoading(false);
         return;
       }
   
-      console.log('Updating password for user:', userId);
+      console.log('Updating password for user:', userId, 'with token:', token ? 'present' : 'missing');
       
       // Pass both userId and token to updatePassword
       const { user: updatedUser, error } = await updatePassword(userId, newPassword, token);
       
       if (error) {
-        setError(error);
         showToast('error', `Failed to update password: ${error}`);
         setIsLoading(false);
         return;
@@ -508,7 +507,6 @@ const LoginPage = () => {
   
       // Check if updatedUser exists before using it
       if (!updatedUser) {
-        setError('Failed to update password: No user data returned');
         showToast('error', 'Failed to update password: Server error');
         setIsLoading(false);
         return;
@@ -537,11 +535,11 @@ const LoginPage = () => {
       
     } catch (error) {
       console.error('Password change error:', error);
-      setError(error.message || 'An unexpected error occurred');
       showToast('error', 'An unexpected error occurred while updating the password');
       setIsLoading(false);
     }
   };
+  
   
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
@@ -557,22 +555,9 @@ const LoginPage = () => {
     document.documentElement.classList.toggle('dark', newMode);
   };
 
-  // Determine error display type
-  const getErrorSeverity = () => {
-    if (error && error.includes('locked')) {
-      return 'high'; // Account locked
-    }
-    if (attemptsLeft !== null && attemptsLeft <= 2) {
-      return 'medium'; // Few attempts left
-    }
-    return 'normal'; // Standard error
-  };
-
-  const errorSeverity = getErrorSeverity();
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      {/* Toast notification */}
+      {/* Toast notification - now at the bottom */}
       <AnimatePresence>
         {toast && (
           <Toast 
@@ -587,7 +572,7 @@ const LoginPage = () => {
       <button 
         onClick={toggleDarkMode} 
         className="fixed top-4 right-4 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 
-                 transition-colors focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] dark:focus:ring-white"
+                 transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
         aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
       >
         {isDarkMode ? (
@@ -615,24 +600,6 @@ const LoginPage = () => {
         <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-6">
           Welcome to {import.meta.env.VITE_APP_NAME || 'SS Portal'}
         </h2>
-        
-        {error && (
-          <div className={`mb-6 px-4 py-3 rounded-lg flex items-start gap-2
-            ${errorSeverity === 'high' 
-              ? 'bg-red-100 dark:bg-red-900/40 border border-red-500 dark:border-red-800 text-red-800 dark:text-red-200' 
-              : errorSeverity === 'medium'
-                ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-500 dark:border-amber-800 text-amber-800 dark:text-amber-200'
-                : 'bg-red-50 dark:bg-red-900/30 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-200'
-            }`}
-          >
-            {errorSeverity === 'high' ? (
-              <ShieldAlert className="w-5 h-5 mt-0.5 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-            )}
-            <span>{error}</span>
-          </div>
-        )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="relative">
@@ -642,7 +609,7 @@ const LoginPage = () => {
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 
                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                       focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] dark:focus:ring-white
+                       focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                        transition-colors duration-200"
               placeholder="Username"
               required
@@ -659,7 +626,7 @@ const LoginPage = () => {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 
                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                       focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] dark:focus:ring-white
+                       focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                        transition-colors duration-200"
               placeholder="Password"
               required
@@ -672,9 +639,9 @@ const LoginPage = () => {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full py-3 rounded-lg bg-[#1e3a8a] hover:bg-[#1e3a8a]/90 dark:bg-white text-white dark:text-black
+            className="w-full py-3 rounded-lg bg-[#0A2647] hover:bg-[#0A2647]/90 dark:bg-white text-white dark:text-[#0A2647]
                      dark:hover:bg-gray-100
-                     focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] dark:focus:ring-white
+                     focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                      transition-all duration-200 transform hover:scale-[1.02]
                      flex items-center justify-center gap-2 disabled:opacity-50"
           >
@@ -714,4 +681,5 @@ const LoginPage = () => {
     </div>
   );
 };
+
 export default LoginPage;

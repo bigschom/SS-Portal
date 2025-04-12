@@ -73,6 +73,28 @@ export const roleBasedNavigation = {
     },
 
     {
+      name: 'Security Services',
+      icon: Lock,
+      children: [
+        {
+          name: 'Service Queue Management',
+          path: '/security-services/control-panel/queue-management',
+          icon: FileCheck
+        },
+        {
+          name: 'New Request',
+          path: '/security-services/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'Tasks',    
+          path: '/security-services/task',
+          icon: CheckSquare
+        },
+      ]
+    },
+
+    {
       name: 'Reports',
       icon: BarChart3,
       children: [
@@ -134,13 +156,6 @@ export const roleBasedNavigation = {
       name: 'Dashboard', 
       path: '/userdashboard', 
       icon: Home 
-    },
-    {
-      name: 'Reports',
-      icon: BarChart3,
-      children: [
-        { name: 'Guard Shift Report', path: '/GuardShiftReport', icon: FileText }
-      ]
     }
   ],
   standarduser: [
@@ -148,18 +163,7 @@ export const roleBasedNavigation = {
       name: 'Dashboard', 
       path: '/userdashboard', 
       icon: Home 
-    },
-    {
-      name: 'New Request',
-      path: '/new-request',
-      icon: FileCheck
-    },
-    {
-      name: 'All Request',
-      path: '/all-background-checks',
-      icon: List
-    },
-    { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
+    }
   ],
   security_guard: [
     { 
@@ -174,6 +178,73 @@ export const roleBasedNavigation = {
       path: '/userdashboard', 
       icon: Home 
     },
+    {
+      name: 'Background Checks',
+      icon: Shield,
+      children: [
+        {
+          name: 'New Request',
+          path: '/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'Intership Overview',
+          path: '/internshipoverview',
+          icon: Briefcase
+        },
+        {
+          name: 'All Request',
+          path: '/all-background-checks',
+          icon: List
+        },
+      ]
+    },
+    {
+      name: 'Stake Holder request',
+      icon: Users,
+      children: [
+        {
+          name: 'New Request',
+          path: '/new-stake-holder-request',
+          icon: FileCheck
+        },
+        {
+          name: 'All Request',
+          path: '/all-stake-holder-request',
+          icon: List
+        },
+      ]
+    },
+    {
+      name: 'Security Services',
+      icon: Lock,
+      children: [
+        {
+          name: 'Service Queue Management',
+          path: '/security-services/control-panel/queue-management',
+          icon: FileCheck
+        },
+        {
+          name: 'New Request',
+          path: '/security-services/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'Tasks',    
+          path: '/security-services/task',
+          icon: CheckSquare
+        },
+      ]
+    },
+
+    {
+      name: 'Reports',
+      icon: BarChart3,
+      children: [
+        { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
+        { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
+      ]
+    },
   ],
 
   user1: [
@@ -182,6 +253,30 @@ export const roleBasedNavigation = {
       path: '/userdashboard', 
       icon: Home 
     },
+    {
+      name: 'Background Checks',
+      icon: Shield,
+      children: [
+        {
+          name: 'New Request',
+          path: '/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'All Request',
+          path: '/all-background-checks',
+          icon: List
+        },
+      ]
+    },
+
+    {
+      name: 'Reports',
+      icon: BarChart3,
+      children: [
+        { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
+      ]
+    },
   ],
 
   user2: [
@@ -189,7 +284,31 @@ export const roleBasedNavigation = {
       name: 'Dashboard', 
       path: '/userdashboard', 
       icon: Home 
-    }
+    },
+    {
+      name: 'Stake Holder request',
+      icon: Users,
+      children: [
+        {
+          name: 'New Request',
+          path: '/new-stake-holder-request',
+          icon: FileCheck
+        },
+        {
+          name: 'All Request',
+          path: '/all-stake-holder-request',
+          icon: List
+        },
+      ]
+    },
+
+    {
+      name: 'Reports',
+      icon: BarChart3,
+      children: [
+        { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
+      ]
+    },
   ]
 };
 

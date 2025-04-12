@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
-import { 
-  Search, 
+import {  
   RefreshCcw,
   Download,
   Filter,
@@ -14,10 +13,12 @@ import {
   BadgeCheck,
   AlertCircle,
   BarChart2,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../../components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '../../components/ui/card'
 import { useAuth } from '../../hooks/useAuth';
 import apiService from '../../config/api-service'
 import {
@@ -38,6 +39,7 @@ import {
   Area
 } from 'recharts'
 import * as XLSX from 'xlsx'
+import { format } from 'date-fns'
 
 const COLORS = ['#0A2647', '#144272', '#205295', '#2C74B3', '#427D9D']
 
@@ -52,15 +54,13 @@ const BackgroundCheckReport = () => {
     startDate: null,
     endDate: null,
     department: 'all',
-    roleType: 'all',
-    citizenship: 'all'
+    roleType: 'all'
   })
 
   // States for data
   const [loading, setLoading] = useState(true)
   const [departments, setDepartments] = useState([])
   const [roles, setRoles] = useState([])
-  const [citizenships, setCitizenships] = useState([])
   const [stats, setStats] = useState({
     totalChecks: 0,
     pendingChecks: 0,
@@ -72,8 +72,16 @@ const BackgroundCheckReport = () => {
   const [statusDistribution, setStatusDistribution] = useState([])
   const [internshipStatusDistribution, setInternshipStatusDistribution] = useState([])
   const [rawData, setRawData] = useState([])
+  const [filteredData, setFilteredData] = useState([])
   const [monthlyData, setMonthlyData] = useState([])
   const [departmentDistribution, setDepartmentDistribution] = useState([])
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [totalPages, setTotalPages] = useState(1)
+  const [displayedRecords, setDisplayedRecords] = useState([])
+  const [exportLoading, setExportLoading] = useState(false)
 
   // Initialize component
   useEffect(() => {
@@ -88,8 +96,7 @@ const BackgroundCheckReport = () => {
       try {
         await Promise.all([
           fetchData(),
-          fetchDepartmentsAndRoles(),
-          fetchCitizenships()
+          fetchDepartmentsAndRoles()
         ])
       } catch (error) {
         console.error('Error initializing page:', error)
@@ -101,19 +108,26 @@ const BackgroundCheckReport = () => {
     initializePage()
   }, [initialized, filters])
 
-  const fetchCitizenships = async () => {
-    try {
-      const citizenshipData = await apiService.backgroundChecks.getCitizenships();
-      
-      if (citizenshipData.error) {
-        throw new Error(citizenshipData.error);
-      }
-      
-      setCitizenships(citizenshipData || []);
-    } catch (error) {
-      console.error('Error fetching citizenships:', error)
+  // Effect for pagination
+  useEffect(() => {
+    if (filteredData.length === 0) {
+      setDisplayedRecords([]);
+      setTotalPages(1);
+      return;
     }
-  }
+    
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    setTotalPages(totalPages);
+    
+    // Adjust current page if it's now out of bounds
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+    
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, filteredData.length);
+    setDisplayedRecords(filteredData.slice(startIndex, endIndex));
+  }, [filteredData, currentPage, itemsPerPage]);
 
   const fetchDepartmentsAndRoles = async () => {
     try {
@@ -137,66 +151,52 @@ const BackgroundCheckReport = () => {
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Get all background checks
-      const backgroundChecks = await apiService.backgroundChecks.getAllBackgroundChecks();
+      // Prepare API filters
+      const apiFilters = {};
+      
+      if (filters.startDate) {
+        apiFilters.startDate = format(filters.startDate, 'yyyy-MM-dd');
+      }
+      
+      if (filters.endDate) {
+        apiFilters.endDate = format(filters.endDate, 'yyyy-MM-dd');
+      }
+      
+      if (filters.department !== 'all') {
+        apiFilters.department_id = filters.department;
+      }
+      
+      if (filters.roleType !== 'all') {
+        apiFilters.role_type = filters.roleType;
+      }
+      
+      
+      // Get background checks directly with server-side filtering
+      const backgroundChecks = await apiService.backgroundChecks.getAllBackgroundChecks(apiFilters);
       
       if (backgroundChecks.error) {
         throw new Error(backgroundChecks.error);
       }
       
-      // Apply filters
-      let filteredData = backgroundChecks;
-      
-      // Apply date range filter
-      if (filters.startDate) {
-        filteredData = filteredData.filter(item => 
-          new Date(item.submitted_date) >= filters.startDate
-        );
-      }
-      
-      if (filters.endDate) {
-        filteredData = filteredData.filter(item => 
-          new Date(item.submitted_date) <= filters.endDate
-        );
-      }
-      
-      // Apply department filter
-      if (filters.department !== 'all') {
-        filteredData = filteredData.filter(item => 
-          item.department_id === parseInt(filters.department)
-        );
-      }
-      
-      // Apply citizenship filter
-      if (filters.citizenship !== 'all') {
-        filteredData = filteredData.filter(item => 
-          item.citizenship === filters.citizenship
-        );
-      }
+      setRawData(backgroundChecks);
+      setFilteredData(backgroundChecks);
+      setCurrentPage(1); // Reset to first page when data changes
       
       // Separate internship and non-internship data
-      const internshipData = filteredData.filter(item => item.role_type === 'Internship');
-      const nonInternshipData = filteredData.filter(item => item.role_type !== 'Internship');
+      const internshipData = backgroundChecks.filter(item => item.role_type === 'Internship');
+      const nonInternshipData = backgroundChecks.filter(item => item.role_type !== 'Internship');
       
       if (filters.roleType === 'Internship') {
         processInternshipData(internshipData);
       } else {
-        // If 'all' is selected, only show non-internship data
-        // If specific role type is selected, filter accordingly
-        const roleFilteredData = filters.roleType === 'all' 
-          ? nonInternshipData
-          : nonInternshipData.filter(item => item.role_type === filters.roleType);
-        
-        processBackgroundCheckData(roleFilteredData);
+        processBackgroundCheckData(nonInternshipData);
       }
       
-      setRawData(filteredData);
-      
       // Process monthly data
-      processMonthlyData(filteredData);
+      processMonthlyData(backgroundChecks);
       
       // Process department distribution
-      processDepartmentDistribution(filteredData);
+      processDepartmentDistribution(backgroundChecks);
       
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -303,7 +303,7 @@ const BackgroundCheckReport = () => {
     const deptGroups = data.reduce((acc, item) => {
       const deptId = item.department_id;
       const dept = departments.find(d => d.id === deptId);
-      const deptName = dept ? dept.name : 'Unknown';
+      const deptName = dept ? dept.name : item.department_name || 'Unknown';
       
       if (!acc[deptName]) {
         acc[deptName] = {
@@ -321,7 +321,7 @@ const BackgroundCheckReport = () => {
     const deptArray = Object.values(deptGroups)
       .map(dept => ({
         ...dept,
-        percentage: ((dept.value / data.length) * 100).toFixed(1)
+        percentage: data.length ? ((dept.value / data.length) * 100).toFixed(1) : '0.0'
       }))
       .sort((a, b) => b.value - a.value);
     
@@ -330,32 +330,40 @@ const BackgroundCheckReport = () => {
 
   const exportToExcel = async () => {
     try {
-      // Use raw data for export
-      const exportData = rawData.map(record => {
-        // Find department name from departments list
-        const department = departments.find(dept => dept.id === record.department_id);
+      setExportLoading(true);
+      
+      // Format the data according to the specified format
+      const exportData = filteredData.map((record, index) => {
+        // Determine feedback date - only show when status is 'Closed'
+        const feedbackDate = record.status === 'Closed' ? 
+          (record.updated_at ? format(new Date(record.updated_at), 'yyyy-MM-dd') : '') : 
+          '';
         
+        // Find department name if it's not directly available
+        const deptName = record.department_name || 
+          (record.department_id ? departments.find(d => d.id === record.department_id)?.name : '') || 
+          'Unknown';
+          
         return {
-          'Department': department ? department.name : record.department_name || 'Unknown',
-          'Role Type': record.role_type || 'Unknown',
-          'Full Name': record.full_names,
-          'Status': record.status,
-          'Citizenship': record.citizenship,
-          'Date Submitted': record.submitted_date ? new Date(record.submitted_date).toLocaleDateString() : 'N/A',
-          'Company': record.from_company || 'N/A',
-          'Working With': record.work_with || 'N/A',
-          'Start Date': record.date_start ? new Date(record.date_start).toLocaleDateString() : 'N/A',
-          'End Date': record.date_end ? new Date(record.date_end).toLocaleDateString() : 'N/A'
+          'No.': index + 1,
+          'Names': record.full_names,
+          'Department': deptName,
+          'Role': record.role || '',
+          'Category': record.role_type,
+          'Submitted date': record.submitted_date ? format(new Date(record.submitted_date), 'yyyy-MM-dd') : '',
+          'Feedback date': feedbackDate,
+          'Status': record.status
         };
       });
 
       // Create a workbook with multiple sheets
       const workbook = XLSX.utils.book_new();
       
-      // Main data sheet
+      // Main data sheet with the formatted data
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       XLSX.utils.book_append_sheet(workbook, worksheet, "Background Checks");
       
+      // Include additional sheets with stats
       // Status distribution sheet
       const statusData = filters.roleType === 'Internship' 
         ? internshipStatusDistribution 
@@ -371,11 +379,53 @@ const BackgroundCheckReport = () => {
       const monthlyWorksheet = XLSX.utils.json_to_sheet(monthlyData);
       XLSX.utils.book_append_sheet(workbook, monthlyWorksheet, "Monthly Data");
       
+      // Create filename that includes filter information
+      let fileName = `background-checks_${new Date().toISOString().split('T')[0]}`;
+      
+      // Add filter info to filename
+      if (filters.startDate && filters.endDate) {
+        fileName += `_${format(filters.startDate, 'yyyy-MM-dd')}_to_${format(filters.endDate, 'yyyy-MM-dd')}`;
+      }
+      
+      if (filters.department !== 'all') {
+        const deptName = departments.find(d => d.id === parseInt(filters.department))?.name || filters.department;
+        fileName += `_dept-${deptName}`;
+      }
+      
+      if (filters.roleType !== 'all') {
+        fileName += `_role-${filters.roleType}`;
+      }
+      
+      fileName += '.xlsx';
+      
       // Write the file
-      XLSX.writeFile(workbook, `background-checks-${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(workbook, fileName);
+      
+      // Log the export activity
+      if (apiService.activityLog && typeof apiService.activityLog.logActivity === 'function') {
+        await apiService.activityLog.logActivity({
+          userId: user.id,
+          description: `Exported background checks report with filters: ${JSON.stringify(filters)}`,
+          type: 'export'
+        });
+      }
+      
     } catch (error) {
       console.error('Error exporting to Excel:', error)
+    } finally {
+      setExportLoading(false);
     }
+  }
+
+  // Pagination handlers
+  const handleItemsPerPageChange = (e) => {
+    setItemsPerPage(parseInt(e.target.value));
+    setCurrentPage(1); // Reset to first page when changing items per page
+  }
+  
+  const goToPage = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
   }
 
   const renderBackgroundCheckStats = () => (
@@ -653,9 +703,14 @@ const BackgroundCheckReport = () => {
             </h1>
             <Button
               onClick={exportToExcel}
+              disabled={exportLoading}
               className="bg-[#0A2647] hover:bg-[#0A2647]/90 text-white flex items-center space-x-2"
             >
-              <Download className="h-4 w-4" />
+              {exportLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
               <span>Export to Excel</span>
             </Button>
           </div>
@@ -780,23 +835,6 @@ const BackgroundCheckReport = () => {
                     </select>
                   </div>
   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Citizenship
-                    </label>
-                    <select
-                      value={filters.citizenship}
-                      onChange={(e) => setFilters(prev => ({ ...prev, citizenship: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    >
-                      <option value="all">All Citizenships</option>
-                      {citizenships.map((citizenship, index) => (
-                        <option key={index} value={citizenship}>
-                          {citizenship}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
                 
                 <div className="mt-4 flex justify-end">
@@ -807,8 +845,7 @@ const BackgroundCheckReport = () => {
                         startDate: null,
                         endDate: null,
                         department: 'all',
-                        roleType: 'all',
-                        citizenship: 'all'
+                        roleType: 'all'
                       });
                     }}
                     variant="outline"
@@ -836,96 +873,101 @@ const BackgroundCheckReport = () => {
             {/* Monthly Trend */}
             {renderMonthlyTrend()}
   
-            {/* Raw Data Table */}
+            {/* Raw Data Table with Pagination */}
             <Card className="mt-6 border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
               <CardHeader className="bg-[#0A2647]/5 dark:bg-[#0A2647]/20">
                 <CardTitle className="flex items-center text-lg font-medium">
                   Raw Data
                 </CardTitle>
                 <CardDescription>
-                  {rawData.length} records found
+                  {filteredData.length} records found
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[5%]">
+                          No.
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Full Name
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Department
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Role Type
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Role
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Category
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Citizenship
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Submitted Date
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Date
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Feedback Date
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                       {loading ? (
                         <tr>
-                          <td colSpan="6" className="px-6 py-4 text-center">
+                          <td colSpan="8" className="px-6 py-4 text-center">
                             <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#0A2647]" />
                           </td>
                         </tr>
-                      ) : rawData.length === 0 ? (
+                      ) : displayedRecords.length === 0 ? (
                         <tr>
-                          <td colSpan="6" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan="8" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                             No records found
                           </td>
                         </tr>
                       ) : (
-                        rawData.slice(0, 10).map((record, index) => {
-                          // Find department name from departments list
-                          const department = departments.find(dept => dept.id === record.department_id);
+                        displayedRecords.map((record, index) => {
+                          // Calculate the actual index across all pages
+                          const actualIndex = (currentPage - 1) * itemsPerPage + index + 1;
                           
+                          // Find department name from departments list if department_id is available
+                          const department = record.department_id ? 
+                            departments.find(dept => dept.id === record.department_id) : null;
+                          
+                          // Determine the feedback date - only show when status is 'Closed'
+                          const feedbackDate = record.status === 'Closed' ? 
+                            (record.updated_at ? format(new Date(record.updated_at), 'MMM d, yyyy') : 'N/A') : 
+                            '';
+                            
                           return (
-                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            <tr key={record.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                {actualIndex}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                                 {record.full_names}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                 {department ? department.name : record.department_name || 'Unknown'}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                {record.role || 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                                 {record.role_type}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                  ${record.role_type === 'Internship'
-                                    ? (new Date(record.date_end) >= new Date()
-                                      ? 'bg-[#0A2647]/10 text-[#0A2647] dark:bg-[#0A2647]/30 dark:text-[#0A2647]'
-                                      : 'bg-[#144272]/10 text-[#144272] dark:bg-[#144272]/30 dark:text-[#144272]')
-                                    : (record.status === 'Pending'
-                                      ? 'bg-[#0A2647]/10 text-[#0A2647] dark:bg-[#0A2647]/30 dark:text-[#0A2647]'
-                                      : 'bg-[#144272]/10 text-[#144272] dark:bg-[#144272]/30 dark:text-[#144272]')
-                                  }`}>
-                                  {record.role_type === 'Internship'
-                                    ? (new Date(record.date_end) >= new Date() ? 'Active' : 'Expired')
-                                    : record.status
-                                  }
-                                </span>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="text-gray-800 dark:text-gray-200">
+                              {record.status}
+                            </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                {record.citizenship}
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                {record.submitted_date ? format(new Date(record.submitted_date), 'MMM d, yyyy') : 'N/A'}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                                {record.role_type === 'Internship'
-                                  ? `${new Date(record.date_start).toLocaleDateString()} - ${new Date(record.date_end).toLocaleDateString()}`
-                                  : record.submitted_date
-                                    ? new Date(record.submitted_date).toLocaleDateString()
-                                    : 'N/A'
-                                }
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                                {feedbackDate}
                               </td>
                             </tr>
                           );
@@ -933,14 +975,125 @@ const BackgroundCheckReport = () => {
                       )}
                     </tbody>
                   </table>
-                  
-                  {rawData.length > 10 && (
-                    <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                      Showing 10 of {rawData.length} records. Export to Excel to see all data.
-                    </div>
-                  )}
                 </div>
               </CardContent>
+              
+              {/* Pagination Footer */}
+              <CardFooter className="bg-gray-50 dark:bg-gray-700 py-4 border-t border-gray-200 dark:border-gray-600">
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      Rows per page:
+                    </span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={handleItemsPerPageChange}
+                      className="border border-gray-200 rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                    >
+                      {[5, 10, 20, 50, 100].map(value => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300 mr-4">
+                      {filteredData.length === 0 ? '0 of 0' : 
+                        `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, filteredData.length)} of ${filteredData.length}`}
+                    </span>
+                    
+                    <div className="flex space-x-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(1)}
+                        disabled={currentPage === 1 || filteredData.length === 0}
+                        className="h-8 w-8 p-0 flex items-center justify-center border-gray-200 dark:border-gray-600"
+                      >
+                        <span className="sr-only">First page</span>
+                        <ChevronLeft className="h-4 w-4" />
+                        <ChevronLeft className="h-4 w-4 -ml-2" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1 || filteredData.length === 0}
+                        className="h-8 w-8 p-0 flex items-center justify-center border-gray-200 dark:border-gray-600"
+                      >
+                        <span className="sr-only">Previous page</span>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      
+                      {/* Page number buttons */}
+                      <div className="flex space-x-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          // Display pages adjacent to the current page
+                          let pageToShow;
+                          
+                          if (totalPages <= 5) {
+                            // If we have 5 or fewer pages, show all
+                            pageToShow = i + 1;
+                          } else if (currentPage <= 3) {
+                            // If near the start, show the first 5 pages
+                            pageToShow = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            // If near the end, show the last 5 pages
+                            pageToShow = totalPages - 4 + i;
+                          } else {
+                            // Otherwise show 2 pages before and 2 after current page
+                            pageToShow = currentPage - 2 + i;
+                          }
+                          
+                          // Only render if pageToShow is a valid page number
+                          if (pageToShow > 0 && pageToShow <= totalPages) {
+                            return (
+                              <Button
+                                key={pageToShow}
+                                variant={currentPage === pageToShow ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => goToPage(pageToShow)}
+                                className={`h-8 w-8 p-0 flex items-center justify-center ${
+                                  currentPage === pageToShow ? 
+                                    'bg-[#0A2647] text-white dark:bg-white dark:text-[#0A2647]' : 
+                                    'border-gray-200 dark:border-gray-600'
+                                }`}
+                              >
+                                {pageToShow}
+                              </Button>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages || filteredData.length === 0}
+                        className="h-8 w-8 p-0 flex items-center justify-center border-gray-200 dark:border-gray-600"
+                      >
+                        <span className="sr-only">Next page</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(totalPages)}
+                        disabled={currentPage === totalPages || filteredData.length === 0}
+                        className="h-8 w-8 p-0 flex items-center justify-center border-gray-200 dark:border-gray-600"
+                      >
+                        <span className="sr-only">Last page</span>
+                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4 -ml-2" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardFooter>
             </Card>
           </div>
         </div>
@@ -949,4 +1102,3 @@ const BackgroundCheckReport = () => {
   }
   
   export default BackgroundCheckReport
-

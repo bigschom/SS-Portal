@@ -32,6 +32,11 @@ import UpdateStakeHRequests from './pages/stakeholder/UpdateRequest';
 import AllStakeHRequests from './pages/stakeholder/AllRequest';
 import StakeholderReport from './pages/report/StakeholderReport';
 
+// Service
+//import QueueManagement from './pages/security-services/control-panel/QueueManagement';
+// import SecurityServices from './pages/security-services/new-request';
+// import TaskManagement from './pages/security-services/task';
+
 // Contact Page
 import Contact from './pages/Contact';
 
@@ -169,20 +174,29 @@ const App = () => {
           <Route path="/user-management" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><UserManagement /></AuthenticatedLayout></ProtectedRoute>} />
 
           {/* Background Check routes */}
-          <Route path="/new-request" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><NewRequest /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/update-background-checks/:id" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><UpdateBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/new-request" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><NewRequest /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/update-background-checks/:id" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><UpdateBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/internshipoverview" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><InternshipOverview /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/all-background-checks" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><AllBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/backgroundcheckreport" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><BackgroundCheckReport /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/all-background-checks" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><AllBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/backgroundcheckreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><BackgroundCheckReport /></AuthenticatedLayout></ProtectedRoute>} />
           
           {/* Stakeholder routes */}
-          <Route path="/new-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><NewStakeHRequest /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/update-stake-holder-request/:id" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><UpdateStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/all-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><AllStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/stakeholderreport" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><StakeholderReport /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/new-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><NewStakeHRequest /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/update-stake-holder-request/:id" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><UpdateStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/all-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user','user2']}><AuthenticatedLayout><AllStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/stakeholderreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><StakeholderReport /></AuthenticatedLayout></ProtectedRoute>} />
+
+            {/* Security service routes */}{/*
+          <Route path="/security-services/control-panel/queue-management" element={<ProtectedRoute requiredRoles={['admin','user']}> <AuthenticatedLayout> <QueueManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
+          
+          {/* Add routes for other security service pages when they're ready */}
+           {/*
+          <Route path="/security-services/new-request" element={<ProtectedRoute requiredRoles={['admin', 'user']}> <AuthenticatedLayout> <SecurityServices /> </AuthenticatedLayout> </ProtectedRoute>}/>
+          <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}><AuthenticatedLayout> <TaskManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
+          */}
 
           {/* Contact route */}
-          <Route path="/contact" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><Contact /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/contact" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><Contact /></AuthenticatedLayout></ProtectedRoute>} />
 
           {/* Root route redirect - using a component to prevent infinite loops */}
           <Route path="/" element={<RootRedirect />} />

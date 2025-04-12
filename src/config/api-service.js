@@ -4,7 +4,24 @@ import departments, { getActiveDepartments } from '../constants/departments.js';
 import { ROLE_TYPES } from '../constants/roleTypes.js';
 
 // Set base URL from environment variable
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+let API_URL = import.meta.env.VITE_API_URL;
+
+if (!API_URL) {
+  // If no explicit API URL is provided, construct it dynamically
+  const isDevelopment = import.meta.env.MODE === 'development';
+  
+  if (isDevelopment) {
+    // In development, connect to the server on localhost or the current hostname
+    // The backend should be running on port 5000
+    const hostname = window.location.hostname;
+    API_URL = `http://${hostname}:5000/api`;
+    
+    console.log('Development API URL:', API_URL);
+  } else {
+    // In production, default to relative path
+    API_URL = '/api';
+  }
+}
 
 // Create axios instance with common configuration
 const apiClient = axios.create({
@@ -76,8 +93,44 @@ const auth = {
 
   async updatePassword(userId, newPassword) {
     try {
+      // Get the user from sessionStorage to ensure we have the latest token
+      const userStr = sessionStorage.getItem('user');
+      let token = null;
+      
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          token = userData.token;
+        } catch (e) {
+          console.error('Error parsing user data:', e);
+        }
+      }
+      
+      // Get temp user if available
+      const tempUserStr = sessionStorage.getItem('tempUser');
+      if (!token && tempUserStr) {
+        try {
+          const tempUserData = JSON.parse(tempUserStr);
+          token = tempUserData.token;
+        } catch (e) {
+          console.error('Error parsing temp user data:', e);
+        }
+      }
+      
       console.log('API service: Sending update password request for user ID:', userId, 'with new password length:', newPassword.length);
-      const response = await apiClient.post('/auth/update-password', { userId, newPassword });
+      
+      // Add token to headers if available
+      const headers = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      
+      const response = await axios.post(
+        `${API_URL}/auth/update-password`, 
+        { userId, newPassword },
+        { headers }
+      );
+      
       console.log('API service: Update password response:', response.data);
       return response.data;
     } catch (error) {
@@ -88,6 +141,7 @@ const auth = {
       return { error: error.message };
     }
   },
+  
 
   async unlockAccount(userId) {
     try {
@@ -230,7 +284,9 @@ const users = {
   }
 };
 
-// Background checks related endpoints
+// Update these methods in your api-service.js file
+// in the backgroundChecks object
+
 const backgroundChecks = {
   getDepartments() {
     // Use the getActiveDepartments helper function from the departments module
@@ -256,13 +312,59 @@ const backgroundChecks = {
   
   async createBackgroundCheck(data) {
     try {
-      const response = await apiClient.post('/background-checks', data);
+      console.log('API service: Creating background check with data:', JSON.stringify(data, null, 2));
+      
+      // Validate required fields to prevent database errors
+      const requiredFields = ['full_names', 'citizenship', 'id_passport_number', 'department_id', 'role_type'];
+      const missingFields = requiredFields.filter(field => !data[field]);
+      
+      if (missingFields.length > 0) {
+        console.error('Missing required fields:', missingFields);
+        return { error: `Missing required fields: ${missingFields.join(', ')}` };
+      }
+      
+      // Process date fields
+      const processedData = { ...data };
+      const dateFields = ['submitted_date', 'passport_expiry_date', 'date_start', 'date_end', 'closed_date'];
+      
+      dateFields.forEach(field => {
+        if (field in processedData) {
+          if (!processedData[field] || processedData[field] === '') {
+            processedData[field] = null;
+          } else {
+            try {
+              const date = new Date(processedData[field]);
+              if (!isNaN(date.getTime())) {
+                processedData[field] = date.toISOString().split('T')[0];
+              } else {
+                console.warn(`Invalid date detected for ${field}:`, processedData[field]);
+                processedData[field] = null;
+              }
+            } catch (error) {
+              console.error(`Error processing date for ${field}:`, error);
+              processedData[field] = null;
+            }
+          }
+        }
+      });
+      
+      // Ensure numeric fields are properly formatted
+      if (processedData.department_id && isNaN(parseInt(processedData.department_id))) {
+        return { error: 'Department ID must be a number' };
+      }
+      
+      // Make the API call
+      const response = await apiClient.post('/background-checks', processedData);
+      console.log('API service: Background check creation response:', response.data);
       return response.data;
     } catch (error) {
+      console.error('API service: Error creating background check:', error);
+      console.error('API service: Error response:', error.response?.data);
+      
       if (error.response) {
-        return { error: error.response.data.error };
+        return { error: error.response.data.error || 'Server error' };
       }
-      return { error: error.message };
+      return { error: error.message || 'Connection error' };
     }
   },
   
@@ -275,7 +377,7 @@ const backgroundChecks = {
       
       // Add each filter to query params
       Object.entries(filters).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
+        if (value !== null && value !== undefined && value !== 'all') {
           queryParams.append(key, value);
         }
       });
@@ -297,9 +399,23 @@ const backgroundChecks = {
   
   async getBackgroundCheckById(id) {
     try {
+      console.log('API service: Fetching background check with ID:', id);
       const response = await apiClient.get(`/background-checks/${id}`);
+      
+      // Log received date fields for debugging
+      if (response.data) {
+        console.log('API service: Received date fields:', {
+          submitted_date: response.data.submitted_date,
+          passport_expiry_date: response.data.passport_expiry_date,
+          date_start: response.data.date_start,
+          date_end: response.data.date_end,
+          closed_date: response.data.closed_date
+        });
+      }
+      
       return response.data;
     } catch (error) {
+      console.error('API service: Error fetching background check:', error);
       if (error.response) {
         return { error: error.response.data.error };
       }
@@ -309,13 +425,46 @@ const backgroundChecks = {
   
   async updateBackgroundCheck(id, data) {
     try {
-      const response = await apiClient.put(`/background-checks/${id}`, data);
+      console.log('API service: Updating background check with ID:', id);
+      console.log('API service: Update data before processing:', data);
+      
+      // Process date fields to ensure they are properly formatted
+      const processedData = { ...data };
+      const dateFields = ['submitted_date', 'passport_expiry_date', 'date_start', 'date_end', 'closed_date'];
+      
+      dateFields.forEach(field => {
+        if (field in processedData) {
+          if (!processedData[field] || processedData[field] === '') {
+            // Convert empty strings or invalid dates to null
+            processedData[field] = null;
+          } else if (typeof processedData[field] === 'string') {
+            // Ensure date strings are in YYYY-MM-DD format for PostgreSQL
+            try {
+              const date = new Date(processedData[field]);
+              if (!isNaN(date.getTime())) {
+                processedData[field] = date.toISOString().split('T')[0];
+              } else {
+                console.warn(`Invalid date detected for ${field}:`, processedData[field]);
+                processedData[field] = null;
+              }
+            } catch (error) {
+              console.error(`Error processing date for ${field}:`, error);
+              processedData[field] = null;
+            }
+          }
+        }
+      });
+      
+      console.log('API service: Processed update data:', processedData);
+      
+      const response = await apiClient.put(`/background-checks/${id}`, processedData);
       return response.data;
     } catch (error) {
+      console.error('API service: Error updating background check:', error);
       if (error.response) {
-        return { error: error.response.data.error };
+        return { error: error.response.data.error || 'Server error' };
       }
-      return { error: error.message };
+      return { error: error.message || 'Connection error' };
     }
   },
   
@@ -405,47 +554,15 @@ const activityLog = {
 };
 
 // Stakeholder requests related endpoints
-const stakeholderRequests = {
-  async getRequestById(id) {
-    try {
-      // First try to get all requests
-      const allRequests = await this.getAllRequests();
-      
-      if (allRequests.error) {
-        return { error: allRequests.error };
-      }
-      
-      // Find the request with the matching ID
-      const request = allRequests.find(req => req.id === parseInt(id));
-      
-      if (!request) {
-        return { error: 'Request not found' };
-      }
-      
-      return request;
-    } catch (error) {
-      console.error('Error fetching request by ID:', error);
-      return { error: error.message };
-    }
-  },
 
-  async getAllRequests() {
-    try {
-      const response = await apiClient.get('/stakeholder-requests');
-      return response.data;
-    } catch (error) {
-      if (error.response) {
-        return { error: error.response.data.error };
-      }
-      return { error: error.message };
-    }
-  },
-  
+const stakeholderRequests = {
   async getOptions() {
     try {
+      console.log('Fetching stakeholder request options');
       const response = await apiClient.get('/stakeholder-requests/options');
       return response.data;
     } catch (error) {
+      console.error('API Error fetching options:', error);
       if (error.response) {
         return { error: error.response.data.error };
       }
@@ -453,11 +570,23 @@ const stakeholderRequests = {
     }
   },
   
-  async createRequest(data) {
+  async getAllRequests(filters = {}) {
     try {
-      const response = await apiClient.post('/stakeholder-requests', data);
+      // Build query string from filters
+      const queryParams = new URLSearchParams();
+      
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== 'all') {
+          queryParams.append(key, value);
+        }
+      });
+      
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+      
+      const response = await apiClient.get(`/stakeholder-requests${queryString}`);
       return response.data;
     } catch (error) {
+      console.error('API Error fetching requests:', error);
       if (error.response) {
         return { error: error.response.data.error };
       }
@@ -465,11 +594,25 @@ const stakeholderRequests = {
     }
   },
   
-  async updateRequest(id, data) {
+  async createRequest(requestData) {
     try {
-      const response = await apiClient.put(`/stakeholder-requests/${id}`, data);
+      const response = await apiClient.post('/stakeholder-requests', requestData);
       return response.data;
     } catch (error) {
+      console.error('API Error creating request:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  },
+  
+  async updateRequest(id, requestData) {
+    try {
+      const response = await apiClient.put(`/stakeholder-requests/${id}`, requestData);
+      return response.data;
+    } catch (error) {
+      console.error('API Error updating request:', error);
       if (error.response) {
         return { error: error.response.data.error };
       }

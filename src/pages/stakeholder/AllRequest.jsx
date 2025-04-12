@@ -7,7 +7,9 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
-  AlertCircle
+  AlertCircle,
+  XCircle,
+  CheckCircle
 } from 'lucide-react'
 import apiService from '../../config/api-service';
 import { Button } from '../../components/ui/button'
@@ -27,6 +29,40 @@ import {
 } from "../../components/ui/alert-dialog"
 import { Alert, AlertDescription } from "../../components/ui/alert"
 import debounce from 'lodash/debounce'
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Toast Notification Component
+const Toast = ({ message, type = 'error', onClose }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 50 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 50 }}
+    className={`fixed bottom-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg ${
+      type === 'success' ? 'bg-[#0A2647]' : 
+      type === 'error' ? 'bg-red-500' : 
+      type === 'warning' ? 'bg-[#0A2647]' : 'bg-[#0A2647]'
+    }`}
+  >
+    <div className="flex items-center">
+      <div className="mr-3">
+        {type === 'success' ? <CheckCircle className="w-5 h-5 text-white" /> : 
+         type === 'error' ? <XCircle className="w-5 h-5 text-white" /> : 
+         type === 'warning' ? <AlertCircle className="w-5 h-5 text-white" /> : 
+         <AlertCircle className="w-5 h-5 text-white" />}
+      </div>
+      <div className="text-white font-medium mr-6">
+        {message}
+      </div>
+      <button
+        onClick={onClose}
+        className="ml-auto bg-transparent text-white rounded-lg p-1.5 hover:bg-white/20"
+      >
+        <span className="sr-only">Close</span>
+        <XCircle className="w-4 h-4" />
+      </button>
+    </div>
+  </motion.div>
+);
 
 const AllStakeHRequests = () => {
   const navigate = useNavigate()
@@ -43,9 +79,7 @@ const AllStakeHRequests = () => {
   const [answeredByOptions, setAnsweredByOptions] = useState([])
   const [showAlertDialog, setShowAlertDialog] = useState(false)
   const [alertDialogMessage, setAlertDialogMessage] = useState('')
-  const [showAlert, setShowAlert] = useState(false)
-  const [alertMessage, setAlertMessage] = useState('')
-  const [alertType, setAlertType] = useState('error')
+  const [toast, setToast] = useState(null)
   const [alertConfirmAction, setAlertConfirmAction] = useState(null)
   
   // Add filter loading states
@@ -67,6 +101,12 @@ const AllStakeHRequests = () => {
     key: 'date_received',
     direction: 'desc'
   })
+
+  // Show toast notification
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
   
   // Initialize component
   useEffect(() => {
@@ -80,6 +120,7 @@ const AllStakeHRequests = () => {
       } catch (error) {
         console.error('Error initializing page:', error)
         setError('Failed to initialize page. Please try again.')
+        showToast('Failed to initialize page. Please try again.', 'error');
       } finally {
         setPageLoading(false)
       }
@@ -103,19 +144,6 @@ const AllStakeHRequests = () => {
     }, 300),
     []
   )
-
-  // Show error alert
-  const showErrorAlert = (message) => {
-    setAlertMessage(message);
-    setAlertType('error');
-    setShowAlert(true);
-    setAlertConfirmAction(null);
-
-    // Automatically remove alert after 3 seconds
-    setTimeout(() => {
-      setShowAlert(false);
-    }, 3000);
-  };
   
   const fetchUsers = async () => {
     setAnsweredByLoading(true);
@@ -129,7 +157,7 @@ const AllStakeHRequests = () => {
       setAnsweredByOptions(users || []);
     } catch (error) {
       console.error('Error fetching users:', error);
-      showErrorAlert('Failed to load users. Some filters may not work correctly.');
+      showToast('Failed to load users. Some filters may not work correctly.', 'warning');
     } finally {
       setAnsweredByLoading(false);
     }
@@ -149,7 +177,7 @@ const AllStakeHRequests = () => {
       setSubjectOptions(options.subjects || []);
     } catch (error) {
       console.error('Error fetching options:', error);
-      showErrorAlert('Failed to load filter options. Some filters may not work correctly.');
+      showToast('Failed to load filter options. Some filters may not work correctly.', 'warning');
     } finally {
       setSendersLoading(false);
       setSubjectsLoading(false);
@@ -245,6 +273,7 @@ const AllStakeHRequests = () => {
     } catch (error) {
       console.error('Error fetching records:', error);
       setError('Failed to load stakeholder request records');
+      showToast('Failed to load stakeholder request records', 'error');
     } finally {
       setLoading(false);
     }
@@ -282,6 +311,9 @@ const AllStakeHRequests = () => {
       const fileName = `stakeholder_requests_${format(new Date(filters.startDate), 'yyyy-MM-dd')}_to_${format(new Date(filters.endDate), 'yyyy-MM-dd')}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
+      // Show success toast
+      showToast(`Exported ${exportData.length} records successfully`, 'success');
+
       // Log the export activity
       await apiService.activityLog.logActivity({
         userId: user.id,
@@ -292,6 +324,7 @@ const AllStakeHRequests = () => {
     } catch (error) {
       console.error('Error exporting data:', error);
       setError('Failed to export data. Please try again.');
+      showToast('Failed to export data. Please try again.', 'error');
     } finally {
       setExportLoading(false);
     }
@@ -300,13 +333,24 @@ const AllStakeHRequests = () => {
   if (pageLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-[#0A2647]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#0A2647] dark:text-white" />
       </div>
     )
   }
 
   return (
     <div className="p-6">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </AnimatePresence>
+      
       <div className="flex justify-center">
         <div className="w-full max-w-[80%]">
           <div className="flex justify-between items-center mb-6">
@@ -316,7 +360,7 @@ const AllStakeHRequests = () => {
             <Button
               onClick={exportToExcel}
               disabled={exportLoading || loading}
-              className="bg-[#0A2647] hover:bg-[#0A2647]/90 text-white"
+              className="bg-[#0A2647] hover:bg-[#0A2647]/90 dark:bg-white dark:text-[#0A2647] dark:hover:bg-gray-200 text-white"
             >
               {exportLoading ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -331,14 +375,6 @@ const AllStakeHRequests = () => {
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Show alerts for filter issues */}
-          {showAlert && (
-            <Alert variant={alertType === 'error' ? "destructive" : "default"} className="mb-6">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{alertMessage}</AlertDescription>
             </Alert>
           )}
 
@@ -362,9 +398,9 @@ const AllStakeHRequests = () => {
           )}
 
           {/* Filters Card */}
-          <Card className="mb-6">
+          <Card className="mb-6 dark:bg-gray-800">
             <CardHeader>
-              <CardTitle className="text-lg font-medium flex items-center">
+              <CardTitle className="text-lg font-medium flex items-center dark:text-white">
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
               </CardTitle>
@@ -387,7 +423,7 @@ const AllStakeHRequests = () => {
                         debouncedSearch(value, updatedFilters);
                       }}
                       placeholder="Search by reference, sender..."
-                      className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-800 dark:border-gray-700"
+                      className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
                 </div>
@@ -400,7 +436,7 @@ const AllStakeHRequests = () => {
                     type="date"
                     value={filters.startDate}
                     onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-800 dark:border-gray-700"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
 
@@ -412,7 +448,7 @@ const AllStakeHRequests = () => {
                     type="date"
                     value={filters.endDate}
                     onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-800 dark:border-gray-700"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
                 </div>
 
@@ -427,7 +463,7 @@ const AllStakeHRequests = () => {
                     <select
                       value={filters.sender}
                       onChange={(e) => setFilters(prev => ({ ...prev, sender: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-800 dark:border-gray-700"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       disabled={sendersLoading}
                     >
                       <option value="all">All Senders</option>
@@ -449,7 +485,7 @@ const AllStakeHRequests = () => {
                     <select
                       value={filters.subject}
                       onChange={(e) => setFilters(prev => ({ ...prev, subject: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-800 dark:border-gray-700"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       disabled={subjectsLoading}
                     >
                       <option value="all">All Subjects</option>
@@ -467,7 +503,7 @@ const AllStakeHRequests = () => {
                   <select
                     value={filters.status}
                     onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-800 dark:border-gray-700"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="all">All Status</option>
                     {statusOptions.map((status, index) => (
@@ -487,7 +523,7 @@ const AllStakeHRequests = () => {
                     <select
                       value={filters.answeredBy}
                       onChange={(e) => setFilters(prev => ({ ...prev, answeredBy: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-800 dark:border-gray-700"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       disabled={answeredByLoading}
                     >
                       <option value="all">All Users</option>
@@ -502,11 +538,11 @@ const AllStakeHRequests = () => {
           </Card>
 
           {/* Table Card */}
-          <Card>
+          <Card className="dark:bg-gray-800">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
                       {[
                         { key: 'reference_number', label: 'Reference Number', width: 'w-[15%]' },
@@ -528,14 +564,14 @@ const AllStakeHRequests = () => {
                               <ChevronUp 
                                 className={`w-4 h-4 ${
                                   sortConfig.key === column.key && sortConfig.direction === 'asc'
-                                    ? 'text-[#0A2647]'
+                                    ? 'text-[#0A2647] dark:text-white'
                                     : 'text-gray-400'
                                 }`}
                               />
                               <ChevronDown 
                                 className={`w-4 h-4 ${
                                   sortConfig.key === column.key && sortConfig.direction === 'desc'
-                                    ? 'text-[#0A2647]'
+                                    ? 'text-[#0A2647] dark:text-white'
                                     : 'text-gray-400'
                                 }`}
                               />
@@ -545,11 +581,11 @@ const AllStakeHRequests = () => {
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {loading ? (
                       <tr>
                         <td colSpan="7" className="px-6 py-4 text-center">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#0A2647]" />
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#0A2647] dark:text-white" />
                         </td>
                       </tr>
                     ) : records.length === 0 ? (
@@ -562,31 +598,24 @@ const AllStakeHRequests = () => {
                       records.map((record, index) => (
                         <tr 
                           key={index}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+                          className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                           onClick={() => navigate(`/update-stake-holder-request/${record.id}`)}
-
                         >
-                          <td className="px-6 py-4 whitespace-nowrap">{record.reference_number}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-800 dark:text-gray-200">{record.reference_number}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-800 dark:text-gray-200">
                             {format(new Date(record.date_received), 'MMM d, yyyy')}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">{record.sender}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">{record.subject}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              record.status === 'Pending'
-                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            }`}>
-                              {record.status}
-                            </span>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-800 dark:text-gray-200">{record.sender}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-800 dark:text-gray-200">{record.subject}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-800 dark:text-gray-200">
+                            {record.status}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-800 dark:text-gray-200">
                             {record.response_date 
                               ? format(new Date(record.response_date), 'MMM d, yyyy')
                               : 'N/A'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">{record.answered_by || 'N/A'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-800 dark:text-gray-200">{record.answered_by || 'N/A'}</td>
                         </tr>
                       ))
                     )}
@@ -602,4 +631,3 @@ const AllStakeHRequests = () => {
 }
 
 export default AllStakeHRequests;
-

@@ -208,8 +208,24 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('Updating password for user ID:', userId, 'with new password length:', newPassword.length);
       
+      // If token is provided, temporarily set it in sessionStorage
+      let originalUser = null;
+      if (token) {
+        originalUser = sessionStorage.getItem('user');
+        // Store the temporary user with token for the API call
+        const tempUser = { id: userId, token };
+        sessionStorage.setItem('user', JSON.stringify(tempUser));
+      }
+      
       // Call the API to update password
       const result = await apiService.auth.updatePassword(userId, newPassword);
+      
+      // Restore original user if we temporarily changed it
+      if (token && originalUser) {
+        sessionStorage.setItem('user', originalUser);
+      } else if (token) {
+        sessionStorage.removeItem('user');
+      }
       
       console.log('Password update API response:', result);
   
@@ -223,9 +239,6 @@ export const AuthProvider = ({ children }) => {
         return { error: 'Server did not return updated user information' };
       }
   
-      // Don't update the user state yet since we'll require re-login
-      // This prevents auto-login with potentially incorrect state
-      
       // Clear any stored user data to force a fresh login
       sessionStorage.removeItem('user');
       sessionStorage.removeItem('passwordChangeRequired');
@@ -237,6 +250,7 @@ export const AuthProvider = ({ children }) => {
       return { error: 'Connection error: ' + (error.message || 'Unknown error') };
     }
   };
+  
   
   const unlockAccount = async (userId) => {
     try {
