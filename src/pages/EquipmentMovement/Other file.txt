@@ -1,0 +1,897 @@
+// D:\ME\GitHub\SS-Portal\src\config\api-service\equipmentMovement.js
+
+import axios from 'axios';
+import { API_BASE_URL } from '../constants';
+import { getAuthHeaders } from './utils';
+
+const EQUIPMENT_MOVEMENT_API = `${API_BASE_URL}/api/equipment-movement`;
+
+// Equipment Movement API Service
+const equipmentMovementService = {
+  /**
+   * Get all equipment movement logs
+   * @returns {Promise<Array>} Array of equipment movement logs
+   */
+  getAllMovementLogs: async () => {
+    try {
+      const response = await axios.get(
+        `${EQUIPMENT_MOVEMENT_API}/logs`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching equipment movement logs:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get equipment movement log by ID
+   * @param {number} id - Equipment movement log ID
+   * @returns {Promise<Object>} Equipment movement log object
+   */
+  getMovementLogById: async (id) => {
+    try {
+      const response = await axios.get(
+        `${EQUIPMENT_MOVEMENT_API}/logs/${id}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching equipment movement log:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a new equipment movement log
+   * @param {Object} logData - Equipment movement log data
+   * @returns {Promise<Object>} Created equipment movement log
+   */
+  createMovementLog: async (logData) => {
+    try {
+      const response = await axios.post(
+        `${EQUIPMENT_MOVEMENT_API}/logs`,
+        logData,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error creating equipment movement log:', error.response?.data || error.message);
+      if (error.response?.data?.error) {
+        return { error: error.response.data.error };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Update an existing equipment movement log
+   * @param {number} id - Equipment movement log ID
+   * @param {Object} logData - Updated equipment movement log data
+   * @returns {Promise<Object>} Updated equipment movement log
+   */
+  updateMovementLog: async (id, logData) => {
+    try {
+      const response = await axios.put(
+        `${EQUIPMENT_MOVEMENT_API}/logs/${id}`,
+        logData,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error updating equipment movement log:', error.response?.data || error.message);
+      if (error.response?.data?.error) {
+        return { error: error.response.data.error };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Delete an equipment movement log
+   * @param {number} id - Equipment movement log ID
+   * @returns {Promise<Object>} Response with success message
+   */
+  deleteMovementLog: async (id) => {
+    try {
+      const response = await axios.delete(
+        `${EQUIPMENT_MOVEMENT_API}/logs/${id}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting equipment movement log:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate a report of equipment movement logs
+   * @param {Object} filters - Filters for the report
+   * @returns {Promise<Blob>} Report file as a Blob
+   */
+  generateReport: async (filters = {}) => {
+    try {
+      const response = await axios.post(
+        `${EQUIPMENT_MOVEMENT_API}/report`,
+        filters,
+        { 
+          headers: { ...getAuthHeaders(), 'Accept': 'application/pdf' },
+          responseType: 'blob'
+        }
+      );
+      
+      // Create a URL for the blob and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `equipment_movement_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error generating equipment movement report:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get statistics about equipment movement
+   * @returns {Promise<Object>} Statistics data
+   */
+  getMovementStatistics: async () => {
+    try {
+      const response = await axios.get(
+        `${EQUIPMENT_MOVEMENT_API}/statistics`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching equipment movement statistics:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+};
+
+export default equipmentMovementService;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+-- D:\ME\GitHub\SS-Portal\server\database\migrations\[timestamp]_create_equipment_movement_logs_table.sql
+
+CREATE TABLE equipment_movement_logs (
+    id SERIAL PRIMARY KEY,
+    item_name VARCHAR(255) NOT NULL,
+    item_description TEXT,
+    serial_number VARCHAR(100),
+    quantity INTEGER NOT NULL DEFAULT 1,
+    movement_type VARCHAR(10) NOT NULL CHECK (movement_type IN ('in', 'out')),
+    carried_by VARCHAR(255) NOT NULL,
+    authorized_by VARCHAR(255) NOT NULL,
+    destination VARCHAR(255),
+    expected_return_date DATE,
+    actual_return_date DATE,
+    notes TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending_return' 
+        CHECK (status IN ('pending_return', 'returned', 'approved_non_return')),
+    created_by INTEGER REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Create index on commonly queried fields
+CREATE INDEX idx_equipment_movement_status ON equipment_movement_logs(status);
+CREATE INDEX idx_equipment_movement_type ON equipment_movement_logs(movement_type);
+CREATE INDEX idx_equipment_movement_created_at ON equipment_movement_logs(created_at);
+
+-- Create a view for equipment that is currently out
+CREATE OR REPLACE VIEW equipment_currently_out AS
+SELECT * FROM equipment_movement_logs
+WHERE movement_type = 'out' AND status = 'pending_return';
+
+-- Create a trigger function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_equipment_movement_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger
+CREATE TRIGGER update_equipment_movement_timestamp
+BEFORE UPDATE ON equipment_movement_logs
+FOR EACH ROW
+EXECUTE FUNCTION update_equipment_movement_timestamp();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+// D:\ME\GitHub\SS-Portal\server\controllers\equipmentMovementController.js
+
+const pool = require('../database/db');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const { validateAuth } = require('../middleware/authMiddleware');
+const { handleServerError } = require('../utils/errorHandler');
+
+/**
+ * Controller for equipment movement operations
+ */
+const equipmentMovementController = {
+  /**
+   * Get all equipment movement logs
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getAllMovementLogs: async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM equipment_movement_logs 
+         ORDER BY created_at DESC`
+      );
+      res.json(result.rows);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Get equipment movement log by ID
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getMovementLogById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(
+        'SELECT * FROM equipment_movement_logs WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Equipment movement log not found' });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Create a new equipment movement log
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  createMovementLog: async (req, res) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const {
+        item_name,
+        item_description,
+        serial_number,
+        quantity,
+        movement_type,
+        carried_by,
+        authorized_by,
+        destination,
+        expected_return_date,
+        notes,
+        status,
+        created_by,
+        updated_by
+      } = req.body;
+
+      // Validate required fields
+      if (!item_name || !movement_type || !carried_by || !authorized_by) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Validate movement type is 'in' or 'out'
+      if (movement_type !== 'in' && movement_type !== 'out') {
+        return res.status(400).json({ error: 'Movement type must be "in" or "out"' });
+      }
+
+      // For outgoing equipment, ensure destination and expected return date are provided
+      if (movement_type === 'out') {
+        if (!destination) {
+          return res.status(400).json({ error: 'Destination is required for outgoing equipment' });
+        }
+        
+        if (!expected_return_date && status === 'pending_return') {
+          return res.status(400).json({ error: 'Expected return date is required for outgoing equipment' });
+        }
+      }
+
+      const result = await client.query(
+        `INSERT INTO equipment_movement_logs (
+          item_name, 
+          item_description, 
+          serial_number, 
+          quantity, 
+          movement_type, 
+          carried_by, 
+          authorized_by, 
+          destination, 
+          expected_return_date, 
+          notes, 
+          status, 
+          created_by, 
+          updated_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+        RETURNING *`,
+        [
+          item_name,
+          item_description || null,
+          serial_number || null,
+          quantity || 1,
+          movement_type,
+          carried_by,
+          authorized_by,
+          destination || null,
+          expected_return_date || null,
+          notes || null,
+          status || 'pending_return',
+          created_by,
+          updated_by
+        ]
+      );
+
+      await client.query('COMMIT');
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      handleServerError(res, error);
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Update an existing equipment movement log
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  updateMovementLog: async (req, res) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const { id } = req.params;
+      const {
+        item_name,
+        item_description,
+        serial_number,
+        quantity,
+        movement_type,
+        carried_by,
+        authorized_by,
+        destination,
+        expected_return_date,
+        notes,
+        status,
+        updated_by
+      } = req.body;
+
+      // Check if log exists
+      const checkResult = await client.query(
+        'SELECT * FROM equipment_movement_logs WHERE id = $1',
+        [id]
+      );
+
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Equipment movement log not found' });
+      }
+
+      // Validate required fields
+      if (!item_name || !movement_type || !carried_by || !authorized_by) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Handle return status updates
+      let actual_return_date = checkResult.rows[0].actual_return_date;
+      
+      // If status changed to 'returned', set actual return date
+      if (status === 'returned' && checkResult.rows[0].status !== 'returned') {
+        actual_return_date = new Date();
+      }
+      
+      // If status changed from 'returned' to something else, clear actual return date
+      if (status !== 'returned' && checkResult.rows[0].status === 'returned') {
+        actual_return_date = null;
+      }
+
+      const result = await client.query(
+        `UPDATE equipment_movement_logs SET
+          item_name = $1,
+          item_description = $2,
+          serial_number = $3,
+          quantity = $4,
+          movement_type = $5,
+          carried_by = $6,
+          authorized_by = $7,
+          destination = $8,
+          expected_return_date = $9,
+          actual_return_date = $10,
+          notes = $11,
+          status = $12,
+          updated_by = $13
+        WHERE id = $14
+        RETURNING *`,
+        [
+          item_name,
+          item_description || null,
+          serial_number || null,
+          quantity || 1,
+          movement_type,
+          carried_by,
+          authorized_by,
+          destination || null,
+          expected_return_date || null,
+          actual_return_date,
+          notes || null,
+          status || 'pending_return',
+          updated_by,
+          id
+        ]
+      );
+
+      await client.query('COMMIT');
+      res.json(result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      handleServerError(res, error);
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Delete an equipment movement log
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  deleteMovementLog: async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if log exists
+      const checkResult = await pool.query(
+        'SELECT id FROM equipment_movement_logs WHERE id = $1',
+        [id]
+      );
+
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Equipment movement log not found' });
+      }
+
+      await pool.query(
+        'DELETE FROM equipment_movement_logs WHERE id = $1',
+        [id]
+      );
+
+      res.json({ message: 'Equipment movement log deleted successfully' });
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Generate a report of equipment movement logs
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  generateReport: async (req, res) => {
+    try {
+      const {
+        startDate,
+        endDate,
+        status,
+        movementType
+      } = req.body;
+
+      // Build query with filters
+      let query = `
+        SELECT 
+          eml.*,
+          u_created.username as created_by_username,
+          u_updated.username as updated_by_username
+        FROM equipment_movement_logs eml
+        LEFT JOIN users u_created ON eml.created_by = u_created.id
+        LEFT JOIN users u_updated ON eml.updated_by = u_updated.id
+        WHERE 1=1
+      `;
+      const queryParams = [];
+      let paramIndex = 1;
+
+      if (startDate) {
+        query += ` AND eml.created_at >= $${paramIndex}`;
+        queryParams.push(new Date(startDate));
+        paramIndex++;
+      }
+
+      if (endDate) {
+        query += ` AND eml.created_at <= $${paramIndex}`;
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        queryParams.push(endDateTime);
+        paramIndex++;
+      }
+
+      if (status) {
+        query += ` AND eml.status = $${paramIndex}`;
+        queryParams.push(status);
+        paramIndex++;
+      }
+
+      if (movementType) {
+        query += ` AND eml.movement_type = $${paramIndex}`;
+        queryParams.push(movementType);
+        paramIndex++;
+      }
+
+      query += ` ORDER BY eml.created_at DESC`;
+
+      const result = await pool.query(query, queryParams);
+      const logs = result.rows;
+
+      // Create a PDF document
+      const doc = new PDFDocument({ margin: 50 });
+      const reportDate = new Date().toLocaleDateString();
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=equipment_movement_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      
+      // Pipe the PDF document to the response
+      doc.pipe(res);
+
+      // Add report title
+      doc.fontSize(20).text('Equipment Movement Log Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(10).text(`Generated on: ${reportDate}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Add filters information if any were applied
+      doc.fontSize(12).text('Applied Filters:', { underline: true });
+      doc.fontSize(10).text(`Date Range: ${startDate ? new Date(startDate).toLocaleDateString() : 'All'} to ${endDate ? new Date(endDate).toLocaleDateString() : 'All'}`);
+      doc.text(`Status: ${status || 'All'}`);
+      doc.text(`Movement Type: ${movementType ? (movementType === 'in' ? 'Incoming' : 'Outgoing') : 'All'}`);
+      doc.moveDown(2);
+
+      // Add summary statistics
+      const totalItems = logs.length;
+      const outgoingItems = logs.filter(log => log.movement_type === 'out').length;
+      const incomingItems = logs.filter(log => log.movement_type === 'in').length;
+      const pendingReturnItems = logs.filter(log => log.status === 'pending_return').length;
+      
+      doc.fontSize(12).text('Summary:', { underline: true });
+      doc.fontSize(10).text(`Total Movements: ${totalItems}`);
+      doc.text(`Outgoing Items: ${outgoingItems}`);
+      doc.text(`Incoming Items: ${incomingItems}`);
+      doc.text(`Items Pending Return: ${pendingReturnItems}`);
+      doc.moveDown(2);
+
+      // Add the table header
+      doc.fontSize(12).text('Equipment Movement Details:', { underline: true });
+      doc.moveDown();
+
+      // Define table columns
+      const tableTop = doc.y;
+      const columns = [
+        { header: 'Date', x: 50, width: 80 },
+        { header: 'Item', x: 130, width: 100 },
+        { header: 'Direction', x: 230, width: 60 },
+        { header: 'Carried By', x: 290, width: 80 },
+        { header: 'Status', x: 370, width: 90 },
+        { header: 'Notes', x: 460, width: 100 }
+      ];
+
+      // Draw table header
+      doc.fontSize(10).font('Helvetica-Bold');
+      columns.forEach(column => {
+        doc.text(column.header, column.x, tableTop, { width: column.width, align: 'left' });
+      });
+      doc.moveDown();
+      const tableRowHeight = 25;
+      let tableRowY = doc.y;
+
+      // Draw table content
+      doc.font('Helvetica');
+      logs.forEach((log, i) => {
+        // Check if we need a new page
+        if (tableRowY > doc.page.height - 100) {
+          doc.addPage();
+          tableRowY = 50;
+          
+          // Redraw header on new page
+          doc.fontSize(10).font('Helvetica-Bold');
+          columns.forEach(column => {
+            doc.text(column.header, column.x, tableRowY, { width: column.width, align: 'left' });
+          });
+          doc.font('Helvetica');
+          tableRowY += tableRowHeight;
+        }
+
+        // Format date
+        const formattedDate = new Date(log.created_at).toLocaleDateString();
+        
+        // Draw row
+        doc.text(formattedDate, columns[0].x, tableRowY, { width: columns[0].width });
+        doc.text(log.item_name, columns[1].x, tableRowY, { width: columns[1].width });
+        doc.text(log.movement_type === 'out' ? 'Out' : 'In', columns[2].x, tableRowY, { width: columns[2].width });
+        doc.text(log.carried_by, columns[3].x, tableRowY, { width: columns[3].width });
+        
+        // Format status
+        let status = '';
+        if (log.status === 'pending_return') status = 'Pending Return';
+        else if (log.status === 'returned') status = 'Returned';
+        else status = 'Non-Return';
+        
+        doc.text(status, columns[4].x, tableRowY, { width: columns[4].width });
+        
+        // Truncate notes if too long
+        const notes = log.notes ? (log.notes.length > 30 ? log.notes.substring(0, 27) + '...' : log.notes) : '';
+        doc.text(notes, columns[5].x, tableRowY, { width: columns[5].width });
+        
+        tableRowY += tableRowHeight;
+      });
+
+      // Add footer
+      const pageCount = doc.bufferedPageRange().count;
+      for (let i = 0; i < pageCount; i++) {
+        doc.switchToPage(i);
+        doc.fontSize(8).text(
+          `Page ${i + 1} of ${pageCount}`,
+          50,
+          doc.page.height - 50,
+          { align: 'center' }
+        );
+      }
+
+      // Finalize the PDF
+      doc.end();
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Get statistics about equipment movement
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getMovementStatistics: async (req, res) => {
+    try {
+      // Get total counts
+      const totalCountResult = await pool.query(
+        'SELECT COUNT(*) as total FROM equipment_movement_logs'
+      );
+      
+      // Get outgoing items count
+      const outgoingCountResult = await pool.query(
+        "SELECT COUNT(*) as outgoing FROM equipment_movement_logs WHERE movement_type = 'out'"
+      );
+      
+      // Get incoming items count
+      const incomingCountResult = await pool.query(
+        "SELECT COUNT(*) as incoming FROM equipment_movement_logs WHERE movement_type = 'in'"
+      );
+      
+      // Get pending return count
+      const pendingReturnCountResult = await pool.query(
+        "SELECT COUNT(*) as pending_return FROM equipment_movement_logs WHERE status = 'pending_return'"
+      );
+      
+      // Get counts by month for the last 6 months
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      
+      const monthlyStatsResult = await pool.query(
+        `SELECT 
+          DATE_TRUNC('month', created_at) as month,
+          COUNT(*) FILTER (WHERE movement_type = 'out') as outgoing,
+          COUNT(*) FILTER (WHERE movement_type = 'in') as incoming
+        FROM equipment_movement_logs
+        WHERE created_at >= $1
+        GROUP BY month
+        ORDER BY month ASC`,
+        [sixMonthsAgo]
+      );
+      
+      // Get most common items being moved
+      const commonItemsResult = await pool.query(
+        `SELECT 
+          item_name, 
+          COUNT(*) as count 
+        FROM equipment_movement_logs 
+        GROUP BY item_name 
+        ORDER BY count DESC 
+        LIMIT 5`
+      );
+
+      // Compile statistics
+      const statistics = {
+        totalCount: parseInt(totalCountResult.rows[0].total),
+        outgoingCount: parseInt(outgoingCountResult.rows[0].outgoing),
+        incomingCount: parseInt(incomingCountResult.rows[0].incoming),
+        pendingReturnCount: parseInt(pendingReturnCountResult.rows[0].pending_return),
+        monthlyStats: monthlyStatsResult.rows.map(row => ({
+          month: new Date(row.month).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }),
+          outgoing: parseInt(row.outgoing),
+          incoming: parseInt(row.incoming)
+        })),
+        commonItems: commonItemsResult.rows.map(row => ({
+          name: row.item_name,
+          count: parseInt(row.count)
+        }))
+      };
+
+      res.json(statistics);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  }
+};
+
+module.exports = equipmentMovementController;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------
+
+
+
+// D:\ME\GitHub\SS-Portal\server\routes\equipmentMovementRoutes.js
+
+const express = require('express');
+const router = express.Router();
+const equipmentMovementController = require('../controllers/equipmentMovementController');
+const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+
+/**
+ * @route GET /api/equipment-movement/logs
+ * @desc Get all equipment movement logs
+ * @access Private
+ */
+router.get(
+  '/logs',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  equipmentMovementController.getAllMovementLogs
+);
+
+/**
+ * @route GET /api/equipment-movement/logs/:id
+ * @desc Get equipment movement log by ID
+ * @access Private
+ */
+router.get(
+  '/logs/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  equipmentMovementController.getMovementLogById
+);
+
+/**
+ * @route POST /api/equipment-movement/logs
+ * @desc Create a new equipment movement log
+ * @access Private
+ */
+router.post(
+  '/logs',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  equipmentMovementController.createMovementLog
+);
+
+/**
+ * @route PUT /api/equipment-movement/logs/:id
+ * @desc Update an existing equipment movement log
+ * @access Private
+ */
+router.put(
+  '/logs/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  equipmentMovementController.updateMovementLog
+);
+
+/**
+ * @route DELETE /api/equipment-movement/logs/:id
+ * @desc Delete an equipment movement log
+ * @access Private
+ */
+router.delete(
+  '/logs/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'superuser']),
+  equipmentMovementController.deleteMovementLog
+);
+
+/**
+ * @route POST /api/equipment-movement/report
+ * @desc Generate a report of equipment movement logs
+ * @access Private
+ */
+router.post(
+  '/report',
+  authenticateToken,
+  authorizeRoles(['admin', 'superuser']),
+  equipmentMovementController.generateReport
+);
+
+/**
+ * @route GET /api/equipment-movement/statistics
+ * @desc Get statistics about equipment movement
+ * @access Private
+ */
+router.get(
+  '/statistics',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  equipmentMovementController.getMovementStatistics
+);
+
+module.exports = router;
+
+
+
+
+
+

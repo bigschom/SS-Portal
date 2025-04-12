@@ -37,6 +37,22 @@ import StakeholderReport from './pages/report/StakeholderReport';
 // import SecurityServices from './pages/security-services/new-request';
 // import TaskManagement from './pages/security-services/task';
 
+// GuardShiftForm Pages
+import GuardShiftForm from './pages/guardshift/GuardShiftForm';
+import GuardShiftReport from './pages/report/GuardShiftReport';
+
+// Equipment Movements 
+import EquipmentMovementLog from './pages/equipment-movement/EquipmentMovementLog';
+import EquipmentMovementReport from './pages/report/EquipmentMovementReport';
+
+// Cleaner Profile Book
+import CleanerProfileBook from './pages/cleaner-profiles/cleaner-profile-book';
+
+// Security Technical Issue 
+
+import SecurityIssueBook from './pages/security-technical-issues/security-issue-book';
+import TechnicianFillPage from './pages/technician-fill/technician-fill-page'
+
 // Contact Page
 import Contact from './pages/Contact';
 
@@ -194,6 +210,24 @@ const App = () => {
           <Route path="/security-services/new-request" element={<ProtectedRoute requiredRoles={['admin', 'user']}> <AuthenticatedLayout> <SecurityServices /> </AuthenticatedLayout> </ProtectedRoute>}/>
           <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}><AuthenticatedLayout> <TaskManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
           */}
+
+          {/* GuardShift routes */}
+          <Route path="/guard-shift" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><GuardShiftForm /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/guard-shift-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><GuardShiftReport /></AuthenticatedLayout></ProtectedRoute>} />
+
+
+
+          {/* Equipment Routes */}  
+          <Route path="/equipment-movement" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementLog /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/equipment-movement-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementReport /></AuthenticatedLayout></ProtectedRoute>} />
+
+            {/* Cleaners Routes */}
+          <Route path="/cleaner-profile-book" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><CleanerProfileBook /></AuthenticatedLayout></ProtectedRoute>} />
+
+          {/* Security technical Routes */}
+          <Route path="/security-issue-book" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><SecurityIssueBook /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/security-technician-fill-page" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><TechnicianFillPage /></AuthenticatedLayout></ProtectedRoute>} />
+          
 
           {/* Contact route */}
           <Route path="/contact" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><Contact /></AuthenticatedLayout></ProtectedRoute>} />

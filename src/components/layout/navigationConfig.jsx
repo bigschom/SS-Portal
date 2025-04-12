@@ -34,6 +34,12 @@ export const roleBasedNavigation = {
       icon: Users
     },
 
+    { 
+      name: 'Guard Shift Report', 
+      path: '/guard-shift', 
+      icon: ClipboardList
+    },
+
     {
       name: 'Background Checks',
       icon: Shield,
@@ -93,6 +99,10 @@ export const roleBasedNavigation = {
         },
       ]
     },
+    { name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
+    { name: 'Cleaner Profile Book', path: '/cleaner-profile-book', icon: BookOpen },
+    { name: 'Security Technical Issue Book', path: '/security-issue-book', icon: Bell },
+    { name: 'Tecnician Site Book', path: '/security-technician-fill-page', icon: Bell },
 
     {
       name: 'Reports',
@@ -100,15 +110,17 @@ export const roleBasedNavigation = {
       children: [
         { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
         { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
+        { name: 'Guard Shift Report', path: '/guard-shift-report', icon: FileText },
+        {name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
       ]
     },
     {
       name: 'UpComing',
       icon: Calendar,
       children: [
-        { name: 'Equipment Movement Log book', path: '/stakeholderreport', icon: Wrench },
-        { name: 'Cleaner Profile Book', path: '/backgroundcheckreport', icon: BookOpen },
-        { name: 'Security Technical Issue Book', path: '/GuardShiftReport', icon: Bell },
+        
+        
+
         {
           name: 'Fraud Case',
           icon: AlertTriangle,
@@ -122,22 +134,6 @@ export const roleBasedNavigation = {
               name: 'Search Page',    
               path: '/#',
               icon: Search
-            },
-          ]
-        },
-        {
-          name: 'Security Services',
-          icon: Lock,
-          children: [
-            {
-              name: 'New Request',
-              path: '/#',
-              icon: FileCheck
-            },
-            {
-              name: 'Tasks',    
-              path: '//#',
-              icon: CheckSquare
             },
           ]
         },
@@ -170,13 +166,23 @@ export const roleBasedNavigation = {
       name: 'Dashboard', 
       path: '/userdashboard', 
       icon: Home 
-    }
+    },
+    { 
+      name: 'Guard Shift Report', 
+      path: '/guard-shift', 
+      icon: ClipboardList
+    },
   ],
   user: [
     { 
       name: 'Dashboard', 
       path: '/userdashboard', 
       icon: Home 
+    },
+    { 
+      name: 'Guard Shift Report', 
+      path: '/guard-shift', 
+      icon: ClipboardList
     },
     {
       name: 'Background Checks',
@@ -237,12 +243,19 @@ export const roleBasedNavigation = {
       ]
     },
 
+    { name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
+    { name: 'Cleaner Profile Book', path: '/cleaner-profile-book', icon: BookOpen },
+    { name: 'Security Technical Issue Book', path: '/security-issue-book', icon: Bell },
+    { name: 'Tecnician Site Book', path: '/security-technician-fill-page', icon: Bell },
+
     {
       name: 'Reports',
       icon: BarChart3,
       children: [
         { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
         { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
+        { name: 'Guard Shift Report', path: '/guard-shift-report', icon: FileText },
+        {name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
       ]
     },
   ],

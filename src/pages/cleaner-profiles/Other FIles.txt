@@ -1,0 +1,791 @@
+// D:\ME\GitHub\SS-Portal\src\config\api-service\cleanerProfiles.js
+
+import axios from 'axios';
+import { API_BASE_URL } from '../constants';
+import { getAuthHeaders } from './utils';
+
+const CLEANER_PROFILES_API = `${API_BASE_URL}/api/cleaner-profiles`;
+
+// Cleaner Profiles API Service
+const cleanerProfilesService = {
+  /**
+   * Get all cleaner profiles
+   * @returns {Promise<Array>} Array of cleaner profiles
+   */
+  getAllProfiles: async () => {
+    try {
+      const response = await axios.get(
+        `${CLEANER_PROFILES_API}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching cleaner profiles:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get cleaner profile by ID
+   * @param {number} id - Cleaner profile ID
+   * @returns {Promise<Object>} Cleaner profile object
+   */
+  getProfileById: async (id) => {
+    try {
+      const response = await axios.get(
+        `${CLEANER_PROFILES_API}/${id}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching cleaner profile:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a new cleaner profile
+   * @param {FormData} formData - Cleaner profile data with photo
+   * @returns {Promise<Object>} Created cleaner profile
+   */
+  createProfile: async (formData) => {
+    try {
+      const response = await axios.post(
+        `${CLEANER_PROFILES_API}`,
+        formData,
+        { 
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error creating cleaner profile:', error.response?.data || error.message);
+      if (error.response?.data?.error) {
+        return { error: error.response.data.error };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Update an existing cleaner profile
+   * @param {number} id - Cleaner profile ID
+   * @param {FormData} formData - Updated cleaner profile data with optional photo
+   * @returns {Promise<Object>} Updated cleaner profile
+   */
+
+   ----------------------------------------------------------------------------------------------------------------------------
+
+
+   -- D:\ME\GitHub\SS-Portal\server\database\migrations\[timestamp]_create_cleaner_profiles_table.sql
+
+CREATE TABLE cleaner_profiles (
+    id SERIAL PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    id_number VARCHAR(100) NOT NULL UNIQUE,
+    gender VARCHAR(50) NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    company VARCHAR(255) NOT NULL,
+    location_assigned VARCHAR(255) NOT NULL,
+    supervisor VARCHAR(255) NOT NULL,
+    shift VARCHAR(50) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE,
+    status VARCHAR(20) NOT NULL DEFAULT 'active' 
+        CHECK (status IN ('active', 'inactive', 'terminated')),
+    notes TEXT,
+    photo_url VARCHAR(500),
+    created_by INTEGER REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Create index on commonly queried fields
+CREATE INDEX idx_cleaner_profiles_status ON cleaner_profiles(status);
+CREATE INDEX idx_cleaner_profiles_company ON cleaner_profiles(company);
+CREATE INDEX idx_cleaner_profiles_location ON cleaner_profiles(location_assigned);
+
+-- Create a trigger function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_cleaner_profiles_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger
+CREATE TRIGGER update_cleaner_profiles_timestamp
+BEFORE UPDATE ON cleaner_profiles
+FOR EACH ROW
+EXECUTE FUNCTION update_cleaner_profiles_timestamp();
+
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------
+
+// D:\ME\GitHub\SS-Portal\server\controllers\cleanerProfileController.js
+
+const pool = require('../database/db');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const { handleServerError } = require('../utils/errorHandler');
+const { uploadFile, deleteFile } = require('../utils/fileUpload');
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    // Accept only images
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
+// Single file upload middleware
+const uploadMiddleware = upload.single('photo');
+
+/**
+ * Controller for cleaner profile operations
+ */
+const cleanerProfileController = {
+  /**
+   * Get all cleaner profiles
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getAllProfiles: async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM cleaner_profiles 
+         ORDER BY created_at DESC`
+      );
+      res.json(result.rows);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Get cleaner profile by ID
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getProfileById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(
+        'SELECT * FROM cleaner_profiles WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Cleaner profile not found' });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Create a new cleaner profile
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  createProfile: async (req, res) => {
+    uploadMiddleware(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        const {
+          full_name,
+          id_number,
+          gender,
+          phone_number,
+          company,
+          location_assigned,
+          supervisor,
+          shift,
+          start_date,
+          end_date,
+          status,
+          notes,
+          created_by,
+          updated_by
+        } = req.body;
+
+        // Validate required fields
+        if (!full_name || !id_number || !gender || !phone_number || !company || 
+            !location_assigned || !supervisor || !shift || !start_date) {
+          return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Check if ID number already exists
+        const checkResult = await client.query(
+          'SELECT id FROM cleaner_profiles WHERE id_number = $1',
+          [id_number]
+        );
+
+        if (checkResult.rows.length > 0) {
+          return res.status(400).json({ error: 'ID number already exists' });
+        }
+
+        let photo_url = null;
+
+        // Handle photo upload if provided
+        if (req.file) {
+          const fileName = `cleaner_${id_number}_${Date.now()}${path.extname(req.file.originalname)}`;
+          photo_url = await uploadFile(req.file.buffer, fileName, 'cleaner-profiles');
+        }
+
+        const result = await client.query(
+          `INSERT INTO cleaner_profiles (
+            full_name,
+            id_number,
+            gender,
+            phone_number,
+            company,
+            location_assigned,
+            supervisor,
+            shift,
+            start_date,
+            end_date,
+            status,
+            notes,
+            photo_url,
+            created_by,
+            updated_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+          RETURNING *`,
+          [
+            full_name,
+            id_number,
+            gender,
+            phone_number,
+            company,
+            location_assigned,
+            supervisor,
+            shift,
+            start_date,
+            end_date || null,
+            status || 'active',
+            notes || null,
+            photo_url,
+            created_by,
+            updated_by
+          ]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json(result.rows[0]);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        handleServerError(res, error);
+      } finally {
+        client.release();
+      }
+    });
+  },
+
+  /**
+   * Update an existing cleaner profile
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  updateProfile: async (req, res) => {
+    uploadMiddleware(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        const { id } = req.params;
+        const {
+          full_name,
+          id_number,
+          gender,
+          phone_number,
+          company,
+          location_assigned,
+          supervisor,
+          shift,
+          start_date,
+          end_date,
+          status,
+          notes,
+          updated_by
+        } = req.body;
+
+        // Check if profile exists
+        const checkResult = await client.query(
+          'SELECT * FROM cleaner_profiles WHERE id = $1',
+          [id]
+        );
+
+        if (checkResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Cleaner profile not found' });
+        }
+
+        const existingProfile = checkResult.rows[0];
+
+        // Check if ID number already exists (for another cleaner)
+        if (id_number !== existingProfile.id_number) {
+          const idCheckResult = await client.query(
+            'SELECT id FROM cleaner_profiles WHERE id_number = $1 AND id != $2',
+            [id_number, id]
+          );
+
+          if (idCheckResult.rows.length > 0) {
+            return res.status(400).json({ error: 'ID number already exists for another cleaner' });
+          }
+        }
+
+        let photo_url = existingProfile.photo_url;
+
+        // Handle photo upload if provided
+        if (req.file) {
+          // Delete old photo if exists
+          if (existingProfile.photo_url) {
+            await deleteFile(existingProfile.photo_url, 'cleaner-profiles');
+          }
+          
+          const fileName = `cleaner_${id_number}_${Date.now()}${path.extname(req.file.originalname)}`;
+          photo_url = await uploadFile(req.file.buffer, fileName, 'cleaner-profiles');
+        }
+
+        const result = await client.query(
+          `UPDATE cleaner_profiles SET
+            full_name = $1,
+            id_number = $2,
+            gender = $3,
+            phone_number = $4,
+            company = $5,
+            location_assigned = $6,
+            supervisor = $7,
+            shift = $8,
+            start_date = $9,
+            end_date = $10,
+            status = $11,
+            notes = $12,
+            photo_url = $13,
+            updated_by = $14
+          WHERE id = $15
+          RETURNING *`,
+          [
+            full_name,
+            id_number,
+            gender,
+            phone_number,
+            company,
+            location_assigned,
+            supervisor,
+            shift,
+            start_date,
+            end_date || null,
+            status || 'active',
+            notes || null,
+            photo_url,
+            updated_by,
+            id
+          ]
+        );
+
+        await client.query('COMMIT');
+        res.json(result.rows[0]);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        handleServerError(res, error);
+      } finally {
+        client.release();
+      }
+    });
+  },
+
+  /**
+   * Delete a cleaner profile
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  deleteProfile: async (req, res) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const { id } = req.params;
+      
+      // Check if profile exists and get photo URL
+      const checkResult = await client.query(
+        'SELECT photo_url FROM cleaner_profiles WHERE id = $1',
+        [id]
+      );
+
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Cleaner profile not found' });
+      }
+
+      const photoUrl = checkResult.rows[0].photo_url;
+
+      // Delete the photo if exists
+      if (photoUrl) {
+        await deleteFile(photoUrl, 'cleaner-profiles');
+      }
+
+      // Delete the profile
+      await client.query(
+        'DELETE FROM cleaner_profiles WHERE id = $1',
+        [id]
+      );
+
+      await client.query('COMMIT');
+      res.json({ message: 'Cleaner profile deleted successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      handleServerError(res, error);
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Generate a report of cleaner profiles
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  generateReport: async (req, res) => {
+    try {
+      const { status, company, location } = req.body;
+
+      // Build query with filters
+      let query = `
+        SELECT 
+          cp.*,
+          u_created.username as created_by_username,
+          u_updated.username as updated_by_username
+        FROM cleaner_profiles cp
+        LEFT JOIN users u_created ON cp.created_by = u_created.id
+        LEFT JOIN users u_updated ON cp.updated_by = u_updated.id
+        WHERE 1=1
+      `;
+      const queryParams = [];
+      let paramIndex = 1;
+
+      if (status) {
+        query += ` AND cp.status = $${paramIndex}`;
+        queryParams.push(status);
+        paramIndex++;
+      }
+
+      if (company) {
+        query += ` AND cp.company ILIKE $${paramIndex}`;
+        queryParams.push(`%${company}%`);
+        paramIndex++;
+      }
+
+      if (location) {
+        query += ` AND cp.location_assigned ILIKE $${paramIndex}`;
+        queryParams.push(`%${location}%`);
+        paramIndex++;
+      }
+
+      query += ` ORDER BY cp.full_name ASC`;
+
+      const result = await pool.query(query, queryParams);
+      const profiles = result.rows;
+
+      // Create a PDF document
+      const doc = new PDFDocument({ margin: 50 });
+      const reportDate = new Date().toLocaleDateString();
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=cleaner_profiles_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      
+      // Pipe the PDF document to the response
+      doc.pipe(res);
+
+      // Add report title
+      doc.fontSize(20).text('Cleaner Profiles Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(10).text(`Generated on: ${reportDate}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Add filters information if any were applied
+      doc.fontSize(12).text('Applied Filters:', { underline: true });
+      doc.fontSize(10).text(`Status: ${status || 'All'}`);
+      doc.text(`Company: ${company || 'All'}`);
+      doc.text(`Location: ${location || 'All'}`);
+      doc.moveDown(2);
+
+      // Add summary statistics
+      const totalProfiles = profiles.length;
+      const activeProfiles = profiles.filter(profile => profile.status === 'active').length;
+      const inactiveProfiles = profiles.filter(profile => profile.status === 'inactive').length;
+      const terminatedProfiles = profiles.filter(profile => profile.status === 'terminated').length;
+      
+      doc.fontSize(12).text('Summary:', { underline: true });
+      doc.fontSize(10).text(`Total Profiles: ${totalProfiles}`);
+      doc.text(`Active Cleaners: ${activeProfiles}`);
+      doc.text(`Inactive Cleaners: ${inactiveProfiles}`);
+      doc.text(`Terminated Cleaners: ${terminatedProfiles}`);
+      doc.moveDown(2);
+
+      // Add the table header
+      doc.fontSize(12).text('Cleaner Profile Details:', { underline: true });
+      doc.moveDown();
+
+      // Define table columns
+      const tableTop = doc.y;
+      const columns = [
+        { header: 'Name', x: 50, width: 120 },
+        { header: 'ID Number', x: 170, width: 100 },
+        { header: 'Company', x: 270, width: 100 },
+        { header: 'Location', x: 370, width: 100 },
+        { header: 'Status', x: 470, width: 80 }
+      ];
+
+      // Draw table header
+      doc.fontSize(10).font('Helvetica-Bold');
+      columns.forEach(column => {
+        doc.text(column.header, column.x, tableTop, { width: column.width, align: 'left' });
+      });
+      doc.moveDown();
+      const tableRowHeight = 25;
+      let tableRowY = doc.y;
+
+      // Draw table content
+      doc.font('Helvetica');
+      profiles.forEach((profile, i) => {
+        // Check if we need a new page
+        if (tableRowY > doc.page.height - 100) {
+          doc.addPage();
+          tableRowY = 50;
+          
+          // Redraw header on new page
+          doc.fontSize(10).font('Helvetica-Bold');
+          columns.forEach(column => {
+            doc.text(column.header, column.x, tableRowY, { width: column.width, align: 'left' });
+          });
+          doc.font('Helvetica');
+          tableRowY += tableRowHeight;
+        }
+
+        // Draw row
+        doc.text(profile.full_name, columns[0].x, tableRowY, { width: columns[0].width });
+        doc.text(profile.id_number, columns[1].x, tableRowY, { width: columns[1].width });
+        doc.text(profile.company, columns[2].x, tableRowY, { width: columns[2].width });
+        doc.text(profile.location_assigned, columns[3].x, tableRowY, { width: columns[3].width });
+        doc.text(profile.status, columns[4].x, tableRowY, { width: columns[4].width });
+        
+        tableRowY += tableRowHeight;
+      });
+
+      // Add footer
+      const pageCount = doc.bufferedPageRange().count;
+      for (let i = 0; i < pageCount; i++) {
+        doc.switchToPage(i);
+        doc.fontSize(8).text(
+          `Page ${i + 1} of ${pageCount}`,
+          50,
+          doc.page.height - 50,
+          { align: 'center' }
+        );
+      }
+
+      // Finalize the PDF
+      doc.end();
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Get statistics about cleaner profiles
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getProfileStatistics: async (req, res) => {
+    try {
+      // Get total counts
+      const totalCountResult = await pool.query(
+        'SELECT COUNT(*) as total FROM cleaner_profiles'
+      );
+      
+      // Get active cleaners count
+      const activeCountResult = await pool.query(
+        "SELECT COUNT(*) as active FROM cleaner_profiles WHERE status = 'active'"
+      );
+      
+      // Get inactive cleaners count
+      const inactiveCountResult = await pool.query(
+        "SELECT COUNT(*) as inactive FROM cleaner_profiles WHERE status = 'inactive'"
+      );
+      
+      // Get terminated cleaners count
+      const terminatedCountResult = await pool.query(
+        "SELECT COUNT(*) as terminated FROM cleaner_profiles WHERE status = 'terminated'"
+      );
+      
+      // Get counts by company
+      const companyStatsResult = await pool.query(
+        `SELECT 
+          company, 
+          COUNT(*) as count 
+        FROM cleaner_profiles 
+        GROUP BY company 
+        ORDER BY count DESC`
+      );
+      
+      // Get counts by location
+      const locationStatsResult = await pool.query(
+        `SELECT 
+          location_assigned, 
+          COUNT(*) as count 
+        FROM cleaner_profiles 
+        GROUP BY location_assigned 
+        ORDER BY count DESC`
+      );
+
+      // Compile statistics
+      const statistics = {
+        totalCount: parseInt(totalCountResult.rows[0].total),
+        activeCount: parseInt(activeCountResult.rows[0].active),
+        inactiveCount: parseInt(inactiveCountResult.rows[0].inactive),
+        terminatedCount: parseInt(terminatedCountResult.rows[0].terminated),
+        companyStats: companyStatsResult.rows.map(row => ({
+          name: row.company,
+          count: parseInt(row.count)
+        })),
+        locationStats: locationStatsResult.rows.map(row => ({
+          name: row.location_assigned,
+          count: parseInt(row.count)
+        }))
+      };
+
+      res.json(statistics);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  }
+};
+
+module.exports = cleanerProfileController;
+
+---------------------------------------------------------------------------------------------------
+
+
+
+// D:\ME\GitHub\SS-Portal\server\routes\cleanerProfileRoutes.js
+
+const express = require('express');
+const router = express.Router();
+const cleanerProfileController = require('../controllers/cleanerProfileController');
+const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+
+/**
+ * @route GET /api/cleaner-profiles
+ * @desc Get all cleaner profiles
+ * @access Private
+ */
+router.get(
+  '/',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  cleanerProfileController.getAllProfiles
+);
+
+/**
+ * @route GET /api/cleaner-profiles/:id
+ * @desc Get cleaner profile by ID
+ * @access Private
+ */
+router.get(
+  '/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  cleanerProfileController.getProfileById
+);
+
+/**
+ * @route POST /api/cleaner-profiles
+ * @desc Create a new cleaner profile
+ * @access Private
+ */
+router.post(
+  '/',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  cleanerProfileController.createProfile
+);
+
+/**
+ * @route PUT /api/cleaner-profiles/:id
+ * @desc Update an existing cleaner profile
+ * @access Private
+ */
+router.put(
+  '/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  cleanerProfileController.updateProfile
+);
+
+/**
+ * @route DELETE /api/cleaner-profiles/:id
+ * @desc Delete a cleaner profile
+ * @access Private
+ */
+router.delete(
+  '/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'superuser']),
+  cleanerProfileController.deleteProfile
+);
+
+/**
+ * @route POST /api/cleaner-profiles/report
+ * @desc Generate a report of cleaner profiles
+ * @access Private
+ */
+router.post(
+  '/report',
+  authenticateToken,
+  authorizeRoles(['admin', 'superuser']),
+  cleanerProfileController.generateReport
+);
+
+/**
+ * @route GET /api/cleaner-profiles/statistics
+ * @desc Get statistics about cleaner profiles
+ * @access Private
+ */
+router.get(
+  '/statistics',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  cleanerProfileController.getProfileStatistics
+);
+
+module.exports = router;

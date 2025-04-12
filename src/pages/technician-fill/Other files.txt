@@ -1,0 +1,236 @@
+// D:\ME\GitHub\SS-Portal\src\config\api-service\technicianVisits.js
+
+import axios from 'axios';
+import { API_BASE_URL } from '../constants';
+import { getAuthHeaders } from './utils';
+
+const TECHNICIAN_VISITS_API = `${API_BASE_URL}/api/technician-visits`;
+
+// Technician Visits API Service
+const technicianVisitsService = {
+  /**
+   * Get all technician visits
+   * @returns {Promise<Array>} Array of technician visits
+   */
+  getAllVisits: async () => {
+    try {
+      const response = await axios.get(
+        `${TECHNICIAN_VISITS_API}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching technician visits:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get technician visit by ID
+   * @param {number} id - Technician visit ID
+   * @returns {Promise<Object>} Technician visit object
+   */
+  getVisitById: async (id) => {
+    try {
+      const response = await axios.get(
+        `${TECHNICIAN_VISITS_API}/${id}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching technician visit:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a new technician visit
+   * @param {Object} visitData - Technician visit data
+   * @returns {Promise<Object>} Created technician visit
+   */
+  createVisit: async (visitData) => {
+    try {
+      const response = await axios.post(
+        `${TECHNICIAN_VISITS_API}`,
+        visitData,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error creating technician visit:', error.response?.data || error.message);
+      if (error.response?.data?.error) {
+        return { error: error.response.data.error };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Update an existing technician visit
+   * @param {number} id - Technician visit ID
+   * @param {Object} visitData - Updated technician visit data
+   * @returns {Promise<Object>} Updated technician visit
+   */
+  updateVisit: async (id, visitData) => {
+    try {
+      const response = await axios.put(
+        `${TECHNICIAN_VISITS_API}/${id}`,
+        visitData,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error updating technician visit:', error.response?.data || error.message);
+      if (error.response?.data?.error) {
+        return { error: error.response.data.error };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a technician visit
+   * @param {number} id - Technician visit ID
+   * @returns {Promise<Object>} Response with success message
+   */
+  deleteVisit: async (id) => {
+    try {
+      const response = await axios.delete(
+        `${TECHNICIAN_VISITS_API}/${id}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting technician visit:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate a report of technician visits
+   * @param {Object} filters - Filters for the report
+   * @returns {Promise<Blob>} Report file as a Blob
+   */
+  generateReport: async (filters = {}) => {
+    try {
+      const response = await axios.post(
+        `${TECHNICIAN_VISITS_API}/report`,
+        filters,
+        { 
+          headers: { ...getAuthHeaders(), 'Accept': 'application/pdf' },
+          responseType: 'blob'
+        }
+      );
+      
+      // Create a URL for the blob and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `technician_visits_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error generating technician visits report:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get statistics about technician visits
+   * @returns {Promise<Object>} Statistics data
+   */
+  getVisitStatistics: async () => {
+    try {
+      const response = await axios.get(
+        `${TECHNICIAN_VISITS_API}/statistics`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching technician visit statistics:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+};
+
+export default technicianVisitsService;
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+-- D:\ME\GitHub\SS-Portal\server\database\migrations\[timestamp]_create_technician_visits_table.sql
+
+CREATE TABLE technician_visits (
+    id SERIAL PRIMARY KEY,
+    technician_name VARCHAR(255) NOT NULL,
+    visit_purpose VARCHAR(255) NOT NULL,
+    company VARCHAR(255) NOT NULL,
+    equipment_serviced VARCHAR(255) NOT NULL,
+    service_type VARCHAR(50) NOT NULL DEFAULT 'maintenance' 
+        CHECK (service_type IN ('maintenance', 'repair', 'installation', 'inspection', 'upgrade', 'other')),
+    location VARCHAR(255) NOT NULL,
+    visit_date DATE NOT NULL,
+    arrival_time VARCHAR(10),
+    departure_time VARCHAR(10),
+    status VARCHAR(20) NOT NULL DEFAULT 'scheduled' 
+        CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
+    completion_notes TEXT,
+    escort_required BOOLEAN NOT NULL DEFAULT FALSE,
+    escort_name VARCHAR(255),
+    created_by INTEGER REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Create index on commonly queried fields
+CREATE INDEX idx_technician_visits_status ON technician_visits(status);
+CREATE INDEX idx_technician_visits_date ON technician_visits(visit_date);
+CREATE INDEX idx_technician_visits_company ON technician_visits(company);
+
+-- Create a view for today's visits
+CREATE OR REPLACE VIEW todays_technician_visits AS
+SELECT * FROM technician_visits
+WHERE visit_date = CURRENT_DATE;
+
+-- Create a view for upcoming visits
+CREATE OR REPLACE VIEW upcoming_technician_visits AS
+SELECT * FROM technician_visits
+WHERE visit_date > CURRENT_DATE
+AND status IN ('scheduled', 'in_progress');
+
+-- Create a trigger function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_technician_visits_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger
+CREATE TRIGGER update_technician_visits_timestamp
+BEFORE UPDATE ON technician_visits
+FOR EACH ROW
+EXECUTE FUNCTION update_technician_visits_timestamp();

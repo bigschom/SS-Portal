@@ -1,0 +1,742 @@
+// D:\ME\GitHub\SS-Portal\src\config\api-service\securityIssues.js
+
+import axios from 'axios';
+import { API_BASE_URL } from '../constants';
+import { getAuthHeaders } from './utils';
+
+const SECURITY_ISSUES_API = `${API_BASE_URL}/api/security-issues`;
+
+// Security Issues API Service
+const securityIssuesService = {
+  /**
+   * Get all security issues
+   * @returns {Promise<Array>} Array of security issues
+   */
+  getAllIssues: async () => {
+    try {
+      const response = await axios.get(
+        `${SECURITY_ISSUES_API}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching security issues:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get security issue by ID
+   * @param {number} id - Security issue ID
+   * @returns {Promise<Object>} Security issue object
+   */
+  getIssueById: async (id) => {
+    try {
+      const response = await axios.get(
+        `${SECURITY_ISSUES_API}/${id}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching security issue:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a new security issue
+   * @param {FormData} formData - Security issue data with optional photo
+   * @returns {Promise<Object>} Created security issue
+   */
+  createIssue: async (formData) => {
+    try {
+      const response = await axios.post(
+        `${SECURITY_ISSUES_API}`,
+        formData,
+        { 
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error creating security issue:', error.response?.data || error.message);
+      if (error.response?.data?.error) {
+        return { error: error.response.data.error };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Update an existing security issue
+   * @param {number} id - Security issue ID
+   * @param {FormData} formData - Updated security issue data with optional photo
+   * @returns {Promise<Object>} Updated security issue
+   */
+  updateIssue: async (id, formData) => {
+    try {
+      const response = await axios.put(
+        `${SECURITY_ISSUES_API}/${id}`,
+        formData,
+        { 
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error updating security issue:', error.response?.data || error.message);
+      if (error.response?.data?.error) {
+        return { error: error.response.data.error };
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a security issue
+   * @param {number} id - Security issue ID
+   * @returns {Promise<Object>} Response with success message
+   */
+  deleteIssue: async (id) => {
+    try {
+      const response = await axios.delete(
+        `${SECURITY_ISSUES_API}/${id}`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting security issue:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Generate a report of security issues
+   * @param {Object} filters - Filters for the report
+   * @returns {Promise<Blob>} Report file as a Blob
+   */
+  generateReport: async (filters = {}) => {
+    try {
+      const response = await axios.post(
+        `${SECURITY_ISSUES_API}/report`,
+        filters,
+        { 
+          headers: { ...getAuthHeaders(), 'Accept': 'application/pdf' },
+          responseType: 'blob'
+        }
+      );
+      
+      // Create a URL for the blob and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `security_issues_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error generating security issues report:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get statistics about security issues
+   * @returns {Promise<Object>} Statistics data
+   */
+  getIssueStatistics: async () => {
+    try {
+      const response = await axios.get(
+        `${SECURITY_ISSUES_API}/statistics`,
+        { headers: getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching security issue statistics:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+};
+
+export default securityIssuesService;
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+
+-- D:\ME\GitHub\SS-Portal\server\database\migrations\[timestamp]_create_security_issues_table.sql
+
+CREATE TABLE security_issues (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    priority VARCHAR(50) NOT NULL DEFAULT 'medium' 
+        CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+    reported_by VARCHAR(255) NOT NULL,
+    assigned_to VARCHAR(255),
+    due_date DATE,
+    status VARCHAR(50) NOT NULL DEFAULT 'open' 
+        CHECK (status IN ('open', 'in_progress', 'resolved', 'not_applicable')),
+    resolution_notes TEXT,
+    resolution_date DATE,
+    photo_url VARCHAR(500),
+    created_by INTEGER REFERENCES users(id),
+    updated_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Create index on commonly queried fields
+CREATE INDEX idx_security_issues_status ON security_issues(status);
+CREATE INDEX idx_security_issues_priority ON security_issues(priority);
+CREATE INDEX idx_security_issues_created_at ON security_issues(created_at);
+
+-- Create a view for open and in-progress issues
+CREATE OR REPLACE VIEW active_security_issues AS
+SELECT * FROM security_issues
+WHERE status IN ('open', 'in_progress');
+
+-- Create a view for overdue issues
+CREATE OR REPLACE VIEW overdue_security_issues AS
+SELECT * FROM security_issues
+WHERE status IN ('open', 'in_progress')
+AND due_date < CURRENT_DATE;
+
+-- Create a trigger function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_security_issues_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create the trigger
+CREATE TRIGGER update_security_issues_timestamp
+BEFORE UPDATE ON security_issues
+FOR EACH ROW
+EXECUTE FUNCTION update_security_issues_timestamp();
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+// D:\ME\GitHub\SS-Portal\server\routes\securityIssueRoutes.js
+
+const express = require('express');
+const router = express.Router();
+const securityIssueController = require('../controllers/securityIssueController');
+const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
+
+/**
+ * @route GET /api/security-issues
+ * @desc Get all security issues
+ * @access Private
+ */
+router.get(
+  '/',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  securityIssueController.getAllIssues
+);
+
+/**
+ * @route GET /api/security-issues/:id
+ * @desc Get security issue by ID
+ * @access Private
+ */
+router.get(
+  '/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  securityIssueController.getIssueById
+);
+
+/**
+ * @route POST /api/security-issues
+ * @desc Create a new security issue
+ * @access Private
+ */
+router.post(
+  '/',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  securityIssueController.createIssue
+);
+
+/**
+ * @route PUT /api/security-issues/:id
+ * @desc Update an existing security issue
+ * @access Private
+ */
+router.put(
+  '/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  securityIssueController.updateIssue
+);
+
+/**
+ * @route DELETE /api/security-issues/:id
+ * @desc Delete a security issue
+ * @access Private
+ */
+router.delete(
+  '/:id',
+  authenticateToken,
+  authorizeRoles(['admin', 'superuser']),
+  securityIssueController.deleteIssue
+);
+
+/**
+ * @route POST /api/security-issues/report
+ * @desc Generate a report of security issues
+ * @access Private
+ */
+router.post(
+  '/report',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  securityIssueController.generateReport
+);
+
+/**
+ * @route GET /api/security-issues/statistics
+ * @desc Get statistics about security issues
+ * @access Private
+ */
+router.get(
+  '/statistics',
+  authenticateToken,
+  authorizeRoles(['admin', 'security_guard', 'superuser']),
+  securityIssueController.getIssueStatistics
+);
+
+module.exports = router;
+
+
+--------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+// D:\ME\GitHub\SS-Portal\server\routes\index.js
+
+const express = require('express');
+const router = express.Router();
+
+// Import all route modules
+const authRoutes = require('./authRoutes');
+const userRoutes = require('./userRoutes');
+const equipmentMovementRoutes = require('./equipmentMovementRoutes');
+const cleanerProfileRoutes = require('./cleanerProfileRoutes');
+const securityIssueRoutes = require('./securityIssueRoutes');
+// Import other routes as needed...
+
+// Register routes
+router.use('/api/auth', authRoutes);
+router.use('/api/users', userRoutes);
+router.use('/api/equipment-movement', equipmentMovementRoutes);
+router.use('/api/cleaner-profiles', cleanerProfileRoutes);
+router.use('/api/security-issues', securityIssueRoutes);
+// Register other routes as needed...
+
+module.exports = router;
+
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+// D:\ME\GitHub\SS-Portal\server\controllers\securityIssueController.js
+
+const pool = require('../database/db');
+const PDFDocument = require('pdfkit');
+const multer = require('multer');
+const { handleServerError } = require('../utils/errorHandler');
+const { uploadFile, deleteFile } = require('../utils/fileUpload');
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    // Accept only images
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
+// Single file upload middleware
+const uploadMiddleware = upload.single('photo');
+
+/**
+ * Controller for security issue operations
+ */
+const securityIssueController = {
+  /**
+   * Get all security issues
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getAllIssues: async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM security_issues 
+         ORDER BY 
+           CASE WHEN priority = 'critical' THEN 1
+                WHEN priority = 'high' THEN 2
+                WHEN priority = 'medium' THEN 3
+                WHEN priority = 'low' THEN 4
+                ELSE 5
+           END,
+           CASE WHEN status = 'open' THEN 1
+                WHEN status = 'in_progress' THEN 2
+                WHEN status = 'resolved' THEN 3
+                WHEN status = 'not_applicable' THEN 4
+                ELSE 5
+           END,
+           created_at DESC`
+      );
+      res.json(result.rows);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Get security issue by ID
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  getIssueById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(
+        'SELECT * FROM security_issues WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Security issue not found' });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      handleServerError(res, error);
+    }
+  },
+
+  /**
+   * Create a new security issue
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  createIssue: async (req, res) => {
+    uploadMiddleware(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        const {
+          title,
+          description,
+          location,
+          priority,
+          reported_by,
+          assigned_to,
+          due_date,
+          status,
+          resolution_notes,
+          resolution_date,
+          created_by,
+          updated_by
+        } = req.body;
+
+        // Validate required fields
+        if (!title || !description || !location || !priority || !reported_by || !status) {
+          return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Validate priority
+        if (!['low', 'medium', 'high', 'critical'].includes(priority)) {
+          return res.status(400).json({ error: 'Invalid priority value' });
+        }
+
+        // Validate status
+        if (!['open', 'in_progress', 'resolved', 'not_applicable'].includes(status)) {
+          return res.status(400).json({ error: 'Invalid status value' });
+        }
+
+        // If status is resolved, resolution notes are required
+        if (status === 'resolved' && !resolution_notes) {
+          return res.status(400).json({ error: 'Resolution notes are required when status is resolved' });
+        }
+
+        let photo_url = null;
+
+        // Handle photo upload if provided
+        if (req.file) {
+          const fileName = `issue_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+          photo_url = await uploadFile(req.file.buffer, fileName, 'security-issues');
+        }
+
+        const result = await client.query(
+          `INSERT INTO security_issues (
+            title,
+            description,
+            location,
+            priority,
+            reported_by,
+            assigned_to,
+            due_date,
+            status,
+            resolution_notes,
+            resolution_date,
+            photo_url,
+            created_by,
+            updated_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+          RETURNING *`,
+          [
+            title,
+            description,
+            location,
+            priority,
+            reported_by,
+            assigned_to || null,
+            due_date || null,
+            status,
+            resolution_notes || null,
+            resolution_date || null,
+            photo_url,
+            created_by,
+            updated_by
+          ]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json(result.rows[0]);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        handleServerError(res, error);
+      } finally {
+        client.release();
+      }
+    });
+  },
+
+  /**
+   * Update an existing security issue
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
+  updateIssue: async (req, res) => {
+    uploadMiddleware(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        const { id } = req.params;
+        const {
+          title,
+          description,
+          location,
+          priority,
+          reported_by,
+          assigned_to,
+          due_date,
+          status,
+          resolution_notes,
+          resolution_date,
+          updated_by
+        } = req.body;
+
+        // Check if issue exists
+        const checkResult = await client.query(
+          'SELECT * FROM security_issues WHERE id = $1',
+          [id]
+        );
+
+        if (checkResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Security issue not found' });
+        }
+
+        const existingIssue = checkResult.rows[0];
+
+        // If status is changing to resolved, resolution notes are required
+        if (status === 'resolved' && !resolution_notes && 
+            (!existingIssue.resolution_notes || existingIssue.status !== 'resolved')) {
+          return res.status(400).json({ error: 'Resolution notes are required when changing status to resolved' });
+        }
+
+        let photo_url = existingIssue.photo_url;
+
+        // Handle photo upload if provided
+        if (req.file) {
+          // Delete old photo if exists
+          if (existingIssue.photo_url) {
+            await deleteFile(existingIssue.photo_url, 'security-issues');
+          }
+          
+          const fileName = `issue_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+          photo_url = await uploadFile(req.file.buffer, fileName, 'security-issues');
+        }
+
+        // Build the update query and params dynamically to avoid overwriting with empty values
+        let updateQuery = 'UPDATE security_issues SET ';
+        const updateParams = [];
+        const updateFields = [];
+        let paramIndex = 1;
+
+    
+        if (title) {
+          updateFields.push(`title = $${paramIndex}`);
+          updateParams.push(title);
+          paramIndex++;
+        }
+        
+        if (description) {
+          updateFields.push(`description = $${paramIndex}`);
+          updateParams.push(description);
+          paramIndex++;
+        }
+        
+        if (location) {
+          updateFields.push(`location = $${paramIndex}`);
+          updateParams.push(location);
+          paramIndex++;
+        }
+        
+        if (priority) {
+          updateFields.push(`priority = $${paramIndex}`);
+          updateParams.push(priority);
+          paramIndex++;
+        }
+        
+        if (reported_by) {
+          updateFields.push(`reported_by = $${paramIndex}`);
+          updateParams.push(reported_by);
+          paramIndex++;
+        }
+        
+        if (assigned_to !== undefined) {
+          updateFields.push(`assigned_to = $${paramIndex}`);
+          updateParams.push(assigned_to || null);
+          paramIndex++;
+        }
+        
+        if (due_date !== undefined) {
+          updateFields.push(`due_date = $${paramIndex}`);
+          updateParams.push(due_date || null);
+          paramIndex++;
+        }
+        
+        if (status) {
+          updateFields.push(`status = $${paramIndex}`);
+          updateParams.push(status);
+          paramIndex++;
+        }
+        
+        if (resolution_notes !== undefined) {
+          updateFields.push(`resolution_notes = $${paramIndex}`);
+          updateParams.push(resolution_notes || null);
+          paramIndex++;
+        }
+        
+        if (resolution_date !== undefined) {
+          updateFields.push(`resolution_date = $${paramIndex}`);
+          updateParams.push(resolution_date || null);
+          paramIndex++;
+        }
+        
+        if (photo_url !== undefined) {
+          updateFields.push(`photo_url = $${paramIndex}`);
+          updateParams.push(photo_url);
+          paramIndex++;
+        }
+        
+        if (updated_by) {
+          updateFields.push(`updated_by = $${paramIndex}`);
+          updateParams.push(updated_by);
+          paramIndex++;
+        }
+        
+        // Always update the updated_at timestamp
+        updateFields.push(`updated_at = NOW()`);
+        
+        // Only proceed if there are fields to update
+        if (updateFields.length === 0) {
+          return res.status(400).json({ error: 'No fields to update provided' });
+        }
+        
+        // Complete the query
+        updateQuery += updateFields.join(', ');
+        updateQuery += ` WHERE id = $${paramIndex} RETURNING *`;
+        updateParams.push(id);
+        
+        // Execute the update
+        const result = await client.query(updateQuery, updateParams);
+        
+        await client.query('COMMIT');
+        res.json(result.rows[0]);
+      } catch (error) {
+        await client.query('ROLLBACK');
+        handleServerError(res, error);
+      } finally {
+        client.release();
+      }
+    });
+  },
+
+}

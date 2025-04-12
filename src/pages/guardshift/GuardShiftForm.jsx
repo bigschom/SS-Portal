@@ -23,6 +23,39 @@ import {
 } from "../../components/ui/alert-dialog";
 import { useGuardShiftForm } from './useGuardShiftForm';
 
+// Toast Component - Consistent with other components
+const Toast = ({ message, type = 'error', onClose }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 50 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 50 }}
+    className={`fixed bottom-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg ${
+      type === 'success' ? 'bg-[#0A2647]' : 
+      type === 'error' ? 'bg-red-500' : 
+      type === 'warning' ? 'bg-[#0A2647]' : 'bg-[#0A2647]'
+    }`}
+  >
+    <div className="flex items-center">
+      <div className="mr-3">
+        {type === 'success' ? <CheckCircle className="w-5 h-5 text-white" /> : 
+         type === 'error' ? <XCircle className="w-5 h-5 text-white" /> : 
+         type === 'warning' ? <AlertCircle className="w-5 h-5 text-white" /> : 
+         <AlertCircle className="w-5 h-5 text-white" />}
+      </div>
+      <div className="text-white font-medium mr-6">
+        {message}
+      </div>
+      <button
+        onClick={onClose}
+        className="ml-auto bg-transparent text-white rounded-lg p-1.5 hover:bg-white/20"
+      >
+        <span className="sr-only">Close</span>
+        <XCircle className="w-4 h-4" />
+      </button>
+    </div>
+  </motion.div>
+);
+
 const GuardShiftForm = () => {
   const { 
     formData, 
@@ -34,12 +67,14 @@ const GuardShiftForm = () => {
     setFormData,
     setNewTeamMember,
     setIsConfirmDialogOpen,
+    setToast,
     addTeamMember,
     removeTeamMember,
     initiateSubmit,
     confirmSubmit,
     cancelSubmit
   } = useGuardShiftForm();
+  
   const renderConfirmationContent = () => {
     return (
       <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -107,31 +142,23 @@ const GuardShiftForm = () => {
       </div>
     );
   };
+  
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Toast Notification */}
       <AnimatePresence>
         {toast.show && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg flex items-center space-x-2 z-50 
-              ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`}
-          >
-            {toast.type === 'success' ? (
-              <CheckCircle className="w-5 h-5" />
-            ) : (
-              <XCircle className="w-5 h-5" />
-            )}
-            <span>{toast.message}</span>
-          </motion.div>
+          <Toast 
+            message={toast.message} 
+            type={toast.type}
+            onClose={() => setToast({ show: false, message: '', type: '' })}
+          />
         )}
       </AnimatePresence>
 
       {/* Confirmation Dialog */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
-        <AlertDialogContent className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+        <AlertDialogContent className="bg-white dark:bg-gray-800 backdrop-blur-sm">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Report Submission</AlertDialogTitle>
             <AlertDialogDescription>
@@ -140,15 +167,16 @@ const GuardShiftForm = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelSubmit}>
+            <AlertDialogCancel onClick={cancelSubmit} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600">
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSubmit}>
+            <AlertDialogAction onClick={confirmSubmit} className="bg-[#0A2647] dark:bg-white text-white dark:text-[#0A2647] hover:bg-[#0A2647]/90 dark:hover:bg-gray-200">
               Confirm Submit
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -191,7 +219,7 @@ const GuardShiftForm = () => {
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                   required
                 >
                   <option value="">Select Location</option>
@@ -213,7 +241,7 @@ const GuardShiftForm = () => {
                   value={formData.shiftType}
                   onChange={(e) => setFormData({ ...formData, shiftType: e.target.value })}
                   className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                   required
                 >
                   <option value="">Select Shift</option>
@@ -226,7 +254,7 @@ const GuardShiftForm = () => {
                   value={formData.shiftStartTime}
                   onChange={(e) => setFormData({ ...formData, shiftStartTime: e.target.value })}
                   className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                   required
                 />
 
@@ -235,11 +263,12 @@ const GuardShiftForm = () => {
                   value={formData.shiftEndTime}
                   onChange={(e) => setFormData({ ...formData, shiftEndTime: e.target.value })}
                   className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                   required
                 />
               </div>
             </motion.div>
+            
             {/* Team Members */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -260,7 +289,7 @@ const GuardShiftForm = () => {
                     value={newTeamMember.id}
                     onChange={(e) => setNewTeamMember({...newTeamMember, id: e.target.value})}
                     className="flex-1 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                   />
                   <input
                     type="text"
@@ -268,14 +297,14 @@ const GuardShiftForm = () => {
                     value={newTeamMember.name}
                     onChange={(e) => setNewTeamMember({...newTeamMember, name: e.target.value})}
                     className="flex-1 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                   />
                   <button
                     type="button"
                     onClick={addTeamMember}
                     disabled={!newTeamMember.id || !newTeamMember.name}
-                    className="flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg
-                      hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    className="flex items-center px-4 py-2 bg-[#0A2647] dark:bg-white text-white dark:text-[#0A2647] rounded-lg
+                      hover:bg-[#0A2647]/90 dark:hover:bg-gray-200 transition-colors disabled:opacity-50"
                   >
                     Add
                   </button>
@@ -307,6 +336,7 @@ const GuardShiftForm = () => {
                 </div>
               </div>
             </motion.div>
+            
             {/* CCTV Monitoring */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -328,7 +358,7 @@ const GuardShiftForm = () => {
                     value={formData.cctvStatus}
                     onChange={(e) => setFormData({ ...formData, cctvStatus: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                     required
                   >
                     <option value="">Select CCTV Status</option>
@@ -348,7 +378,7 @@ const GuardShiftForm = () => {
                       value={formData.cctvSupervisionReason || ''}
                       onChange={(e) => setFormData({ ...formData, cctvSupervisionReason: e.target.value })}
                       className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                       required={formData.cctvStatus === 'not-supervised'}
                     >
                       <option value="">Select Reason</option>
@@ -370,7 +400,7 @@ const GuardShiftForm = () => {
                       onChange={(e) => setFormData({ ...formData, cctvSupervisionOtherReason: e.target.value })}
                       placeholder="Please specify why CCTV was not supervised..."
                       className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black
+                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                                min-h-[100px]"
                       required={formData.cctvSupervisionReason === 'other'}
                     />
@@ -387,7 +417,7 @@ const GuardShiftForm = () => {
                       onChange={(e) => setFormData({ ...formData, cctvIssues: e.target.value })}
                       placeholder="Describe CCTV issues in detail..."
                       className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black
+                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                                min-h-[100px]"
                       required={formData.cctvStatus !== 'fully-functional' && formData.cctvStatus !== 'not-supervised'}
                     />
@@ -395,6 +425,7 @@ const GuardShiftForm = () => {
                 )}
               </div>
             </motion.div>
+            
             {/* Utility Status */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -417,7 +448,7 @@ const GuardShiftForm = () => {
                     value={formData.electricityStatus}
                     onChange={(e) => setFormData({ ...formData, electricityStatus: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                     required
                   >
                     <option value="">Please select status</option>
@@ -436,7 +467,7 @@ const GuardShiftForm = () => {
                     value={formData.waterStatus}
                     onChange={(e) => setFormData({ ...formData, waterStatus: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                     required
                   >
                     <option value="">Please select status</option>
@@ -455,7 +486,7 @@ const GuardShiftForm = () => {
                     value={formData.officeStatus}
                     onChange={(e) => setFormData({ ...formData, officeStatus: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                     required
                   >
                     <option value="">Please select status</option>
@@ -474,7 +505,7 @@ const GuardShiftForm = () => {
                     value={formData.parkingStatus}
                     onChange={(e) => setFormData({ ...formData, parkingStatus: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                     required
                   >
                     <option value="">Please select status</option>
@@ -485,6 +516,7 @@ const GuardShiftForm = () => {
                 </div>
               </div>
             </motion.div>
+            
             {/* Incident Reporting */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -503,7 +535,7 @@ const GuardShiftForm = () => {
                     type="checkbox"
                     checked={formData.incidentOccurred}
                     onChange={(e) => setFormData({ ...formData, incidentOccurred: e.target.checked })}
-                    className="rounded border-gray-300 text-black focus:ring-black"
+                    className="rounded border-gray-300 text-[#0A2647] focus:ring-[#0A2647] dark:focus:ring-white"
                   />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Incident Occurred</span>
                 </label>
@@ -516,7 +548,7 @@ const GuardShiftForm = () => {
                       value={formData.incidentType}
                       onChange={(e) => setFormData({ ...formData, incidentType: e.target.value })}
                       className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                       required={formData.incidentOccurred}
                     >
                       <option value="">Select Incident Type</option>
@@ -535,7 +567,7 @@ const GuardShiftForm = () => {
                       value={formData.incidentTime}
                       onChange={(e) => setFormData({ ...formData, incidentTime: e.target.value })}
                       className="px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                               dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                       required={formData.incidentOccurred}
                     />
                   </div>
@@ -546,7 +578,7 @@ const GuardShiftForm = () => {
                     value={formData.incidentLocation}
                     onChange={(e) => setFormData({ ...formData, incidentLocation: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black"
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                     required={formData.incidentOccurred}
                   />
 
@@ -555,7 +587,7 @@ const GuardShiftForm = () => {
                     value={formData.incidentDescription}
                     onChange={(e) => setFormData({ ...formData, incidentDescription: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                              min-h-[100px]"
                     required={formData.incidentOccurred}
                   />
@@ -565,13 +597,14 @@ const GuardShiftForm = () => {
                     value={formData.actionTaken}
                     onChange={(e) => setFormData({ ...formData, actionTaken: e.target.value })}
                     className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black
+                             dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                              min-h-[100px]"
                     required={formData.incidentOccurred}
                   />
                 </div>
               )}
             </motion.div>
+            
             {/* Notes Section */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -589,7 +622,7 @@ const GuardShiftForm = () => {
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
-                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-black
+                           dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white
                            min-h-[200px]"
                 />
               </div>
@@ -600,10 +633,11 @@ const GuardShiftForm = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg
-                      hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center px-6 py-3 bg-[#0A2647] dark:bg-white text-white dark:text-[#0A2647] rounded-lg
+                      hover:bg-[#0A2647]/90 dark:hover:bg-gray-200 transition-colors 
+                      disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {loading && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
                 Submit Report
               </button>
             </div>

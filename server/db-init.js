@@ -18,11 +18,8 @@ export const initializeTables = async () => {
     // Check and create stakeholder_requests table if it doesn't exist
     await createStakeholderRequestsTable();
     
-    // Check and create departments table if it doesn't exist
-    await createDepartmentsTable();
-    
-    // Check and create roles table if it doesn't exist
-    await createRolesTable();
+    // Check and create guard_shift_reports table if it doesn't exist
+    await createGuardShiftReportsTable();
     
     console.log('Database initialization completed successfully');
   } catch (error) {
@@ -145,45 +142,43 @@ const createStakeholderRequestsTable = async () => {
   }
 };
 
-const createDepartmentsTable = async () => {
-  const tableExists = await checkTableExists('departments');
+const createGuardShiftReportsTable = async () => {
+  const tableExists = await checkTableExists('guard_shift_reports');
   
   if (!tableExists) {
-    console.log('Creating departments table...');
+    console.log('Creating guard_shift_reports table...');
     await query(`
-      CREATE TABLE departments (
+            CREATE TABLE guard_shift_reports (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        status VARCHAR(20) DEFAULT 'active',
+        guard_name VARCHAR(100) NOT NULL,
+        shift_type VARCHAR(50) NOT NULL,
+        location VARCHAR(100) NOT NULL,
+        shift_date DATE NOT NULL,
+        shift_start_time TIMESTAMP,
+        shift_end_time TIMESTAMP,
+        has_incident BOOLEAN DEFAULT FALSE,
+        incident_details TEXT,
+        incident_time TIMESTAMP,
+        actions_taken TEXT,
+        cctv_status VARCHAR(50),
+        cctv_issues TEXT,
+        cctv_supervision_reason VARCHAR(50),
+        cctv_supervision_other_reason TEXT,
+        electricity_status VARCHAR(50),
+        water_status VARCHAR(50),
+        office_status VARCHAR(50),
+        parking_status VARCHAR(50),
+        team_members JSONB,
+        notes TEXT,
         created_by INTEGER,
-        updated_by INTEGER,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
-    console.log('Departments table created');
+    console.log('Guard_shift_reports table created');
   }
 };
 
-const createRolesTable = async () => {
-  const tableExists = await checkTableExists('roles');
-  
-  if (!tableExists) {
-    console.log('Creating roles table...');
-    await query(`
-      CREATE TABLE roles (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        type VARCHAR(50) NOT NULL,
-        created_by INTEGER,
-        updated_by INTEGER,
-        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-      )
-    `);
-    console.log('Roles table created');
-  }
-};
 
 // Helper function to check if a table exists
 const checkTableExists = async (tableName) => {
@@ -193,3 +188,4 @@ const checkTableExists = async (tableName) => {
   );
   return result.rows[0].exists;
 };
+
