@@ -42,16 +42,16 @@ import GuardShiftForm from './pages/guardshift/GuardShiftForm';
 import GuardShiftReport from './pages/report/GuardShiftReport';
 
 // Equipment Movements 
-import EquipmentMovementLog from './pages/equipment-movement/EquipmentMovementLog';
-import EquipmentMovementReport from './pages/report/EquipmentMovementReport';
+//import EquipmentMovementLog from './pages/equipment-movement/EquipmentMovementLog';
+//import EquipmentMovementReport from './pages/report/EquipmentMovementReport';
 
 // Cleaner Profile Book
-import CleanerProfileBook from './pages/cleaner-profiles/cleaner-profile-book';
+//import CleanerProfileBook from './pages/cleaner-profiles/cleaner-profile-book';
 
 // Security Technical Issue 
 
-import SecurityIssueBook from './pages/security-technical-issues/security-issue-book';
-import TechnicianFillPage from './pages/technician-fill/technician-fill-page'
+//import SecurityIssueBook from './pages/security-technical-issues/security-issue-book';
+//import TechnicianFillPage from './pages/technician-fill/technician-fill-page'
 
 // Contact Page
 import Contact from './pages/Contact';
@@ -217,17 +217,23 @@ const App = () => {
 
 
 
-          {/* Equipment Routes */}  
+          {/* Equipment Routes 
           <Route path="/equipment-movement" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementLog /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/equipment-movement-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementReport /></AuthenticatedLayout></ProtectedRoute>} />
 
-            {/* Cleaners Routes */}
+          */}  
+
+            {/* Cleaners Routes 
           <Route path="/cleaner-profile-book" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><CleanerProfileBook /></AuthenticatedLayout></ProtectedRoute>} />
 
-          {/* Security technical Routes */}
+          */}
+
+
+          {/* Security technical Routes 
           <Route path="/security-issue-book" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><SecurityIssueBook /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/security-technician-fill-page" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><TechnicianFillPage /></AuthenticatedLayout></ProtectedRoute>} />
           
+          */}
 
           {/* Contact route */}
           <Route path="/contact" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><Contact /></AuthenticatedLayout></ProtectedRoute>} />
