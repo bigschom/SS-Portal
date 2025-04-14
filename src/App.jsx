@@ -184,7 +184,7 @@ const App = () => {
 
           {/* Dashboard routes */}
           <Route path="/admindashboard" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><AdminDashboard /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/userdashboard" element={<ProtectedRoute requiredRoles={['admin','superuser','standarduser','user', 'user1', 'user2']}><AuthenticatedLayout><UserDashboard /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/userdashboard" element={<ProtectedRoute requiredRoles={['admin','superuser','standarduser', 'security_guard','user', 'user1', 'user2']}><AuthenticatedLayout><UserDashboard /></AuthenticatedLayout></ProtectedRoute>} />
           
           {/* User Management routes */}
           <Route path="/user-management" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><UserManagement /></AuthenticatedLayout></ProtectedRoute>} />

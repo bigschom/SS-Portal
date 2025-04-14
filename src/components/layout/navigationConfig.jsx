@@ -172,6 +172,11 @@ export const roleBasedNavigation = {
       path: '/guard-shift', 
       icon: ClipboardList
     },
+    {
+      name: 'Intership Overview',
+      path: '/internshipoverview',
+      icon: Briefcase
+    },
   ],
   user: [
     { 
