@@ -159,7 +159,8 @@ export const roleBasedNavigation = {
       name: 'Dashboard', 
       path: '/userdashboard', 
       icon: Home 
-    }
+    },
+    { name: 'Guard Shift Report', path: '/guard-shift-report', icon: FileText },
   ],
   security_guard: [
     { 

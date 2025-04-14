@@ -3,15 +3,12 @@ export const getRoleBasedDashboard = (role) => {
       case 'admin':
         return '/admindashboard';
       case 'superuser':
-        return '/securityguarddashboard';
-      case 'standarduser':
-        return '/supervisordashboard';
+      case 'standarduser': 
+      case 'security_guard':
       case 'user':
       case 'user1':
-      case 'user2': 
+      case 'user2':
         return '/userdashboard';
-      case 'manager':
-        return '/managerdashboard';
       default:
         return '/unauthorized';
     }
