@@ -212,7 +212,7 @@ const App = () => {
           */}
 
           {/* GuardShift routes */}
-          <Route path="/guard-shift" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><GuardShiftForm /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/guard-shift" element={<ProtectedRoute requiredRoles={['admin','user','security_guard']}><AuthenticatedLayout><GuardShiftForm /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/guard-shift-report" element={<ProtectedRoute requiredRoles={['admin','user','standarduser']}><AuthenticatedLayout><GuardShiftReport /></AuthenticatedLayout></ProtectedRoute>} />
 
 
