@@ -1,16 +1,17 @@
-// src/pages/security-services/new-request/index.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../../../../hooks/useAuth';
-import { useToast } from '../../../../components/ui/use-toast';
-import { Alert, AlertDescription } from '../../../../components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../components/ui/tabs';
+import { useAuth } from '../../../hooks/useAuth';
+import { useToast } from '../../../components/ui/use-toast';
+import { Alert, AlertDescription } from '../../../components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import { AlertCircle, Loader2 } from 'lucide-react';
+
 import ServiceCard from './components/ServiceCard';
 import { FormProvider } from './context/FormContext';
+import apiService from '../../../config/api-service';
 
-// Import form components
+// Import all service request components
 import SerialNumberRequest from './components/SerialNumberRequest';
 import StolenPhoneCheck from './components/StolenPhoneCheck';
 import CallHistoryRequest from './components/CallHistoryRequest';
@@ -18,16 +19,13 @@ import UnblockCallRequest from './components/UnblockCallRequest';
 import UnblockMomoRequest from './components/UnblockMomoRequest';
 import MoneyRefundRequest from './components/MoneyRefundRequest';
 import MomoTransactionRequest from './components/MomoTransactionRequest';
-import AgentCommissionRequest from './components/AgentCommissionRequest';
 import BackofficeAppointment from './components/BackofficeAppointment';
-import InternetIssueRequest from './components/InternetIssueRequest';
-import RequestFollowup from './components/RequestFollowup';
-import { db } from '@/config/db';
 
 const SecurityServices = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  
   const [pageLoading, setPageLoading] = useState(true);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState(null);
@@ -37,28 +35,45 @@ const SecurityServices = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [services, setServices] = useState([]);
   const [permittedServices, setPermittedServices] = useState([]);
+  
+  // Use a ref to prevent unnecessary API calls
+  const fetchedRef = useRef(false);
 
   // Fetch available services and permissions
   useEffect(() => {
     const fetchServices = async () => {
+      // Prevent redundant fetches
+      if (fetchedRef.current) return;
+      
       try {
-        if (!user) return;
+        if (!user) {
+          setPageLoading(false);
+          setServicesLoading(false);
+          return;
+        }
         
         setServicesLoading(true);
+        fetchedRef.current = true;
         
-        // Fetch all available services
-        const { rows: servicesData } = await db.query(`
-          SELECT * FROM services WHERE active = true ORDER BY name
-        `);
+        console.log('Fetching security services...');
         
-        // Fetch user's service permissions
-        const { rows: permissionsData } = await db.query(`
-          SELECT service_type FROM user_service_permissions 
-          WHERE user_id = $1
-        `, [user.id]);
+        // Fetch available services
+        const servicesResult = await apiService.securityServices.getAvailableServices();
+        if (servicesResult.error) {
+          throw new Error(servicesResult.error);
+        }
         
-        // Get the list of permitted service types
-        const permittedTypes = permissionsData.map(p => p.service_type);
+        // Fetch user permissions
+        const permissionsResult = await apiService.securityServices.getUserServicePermissions(user.id);
+        if (permissionsResult.error) {
+          throw new Error(permissionsResult.error);
+        }
+        
+        const servicesData = servicesResult.services || [];
+        const permittedTypes = permissionsResult.permissions || [];
+        
+        console.log('Services fetched:', servicesData.length);
+        console.log('User permissions fetched:', permittedTypes.length);
         
         // Filter services based on user permissions
         const userServices = servicesData.filter(service => 
@@ -85,6 +100,11 @@ const SecurityServices = () => {
     };
 
     fetchServices();
+    
+    // Cleanup function
+    return () => {
+      fetchedRef.current = false;
+    };
   }, [user, toast]);
 
   const handleServiceSelect = useCallback((service) => {
@@ -110,28 +130,31 @@ const SecurityServices = () => {
     switch (selectedService.service_type) {
       case 'request_serial_number':
         return <SerialNumberRequest {...props} />;
-      case 'check_stolen_phone':
+      case 'stolen_phone_check':
         return <StolenPhoneCheck {...props} />;
-      case 'call_history':
+      case 'call_history_request':
         return <CallHistoryRequest {...props} />;
-      case 'unblock_call':
+      case 'unblock_call_request':
         return <UnblockCallRequest {...props} />;
-      case 'unblock_momo':
+      case 'unblock_momo_request':
         return <UnblockMomoRequest {...props} />;
-      case 'money_refund':
+      case 'money_refund_request':
         return <MoneyRefundRequest {...props} />;
-      case 'momo_transaction':
+      case 'momo_transaction_request':
         return <MomoTransactionRequest {...props} />;
-      case 'agent_commission':
-        return <AgentCommissionRequest {...props} />;
       case 'backoffice_appointment':
         return <BackofficeAppointment {...props} />;
-      case 'request_followup':
-        return <RequestFollowup {...props} />;
-      case 'internet_issue':
-        return <InternetIssueRequest {...props} />;
       default:
-        return null;
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+            <Alert className="max-w-lg">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                This service form is not yet implemented. Please check back later.
+              </AlertDescription>
+            </Alert>
+          </div>
+        );
     }
   }, [selectedService, handleBack]);
 
@@ -141,19 +164,19 @@ const SecurityServices = () => {
     
     if (activeTab === 'phone') {
       return permittedServices.filter(service => 
-        ['request_serial_number', 'check_stolen_phone', 'call_history', 'unblock_call'].includes(service.service_type)
+        ['request_serial_number', 'stolen_phone_check', 'call_history_request', 'unblock_call_request'].includes(service.service_type)
       );
     }
     
     if (activeTab === 'momo') {
       return permittedServices.filter(service => 
-        ['momo_transaction', 'unblock_momo', 'money_refund'].includes(service.service_type)
+        ['momo_transaction_request', 'unblock_momo_request', 'money_refund_request'].includes(service.service_type)
       );
     }
     
     if (activeTab === 'other') {
       return permittedServices.filter(service => 
-        ['agent_commission', 'backoffice_appointment', 'internet_issue', 'request_followup'].includes(service.service_type)
+        ['backoffice_appointment'].includes(service.service_type)
       );
     }
     
@@ -162,17 +185,18 @@ const SecurityServices = () => {
 
   // Check if there are services in each category
   const hasPhoneServices = permittedServices.some(service => 
-    ['request_serial_number', 'check_stolen_phone', 'call_history', 'unblock_call'].includes(service.service_type)
+    ['request_serial_number', 'stolen_phone_check', 'call_history_request', 'unblock_call_request'].includes(service.service_type)
   );
   
   const hasMomoServices = permittedServices.some(service => 
-    ['momo_transaction', 'unblock_momo', 'money_refund'].includes(service.service_type)
+    ['momo_transaction_request', 'unblock_momo_request', 'money_refund_request'].includes(service.service_type)
   );
   
   const hasOtherServices = permittedServices.some(service => 
-    ['agent_commission', 'backoffice_appointment', 'internet_issue', 'request_followup'].includes(service.service_type)
+    ['backoffice_appointment'].includes(service.service_type)
   );
 
+  // Loading state
   if (pageLoading || servicesLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900">
@@ -181,6 +205,7 @@ const SecurityServices = () => {
     );
   }
 
+  // Error state
   if (servicesError) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900">

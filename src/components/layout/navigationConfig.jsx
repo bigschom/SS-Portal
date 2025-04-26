@@ -17,7 +17,8 @@ import {
   FileText,
   List,
   BookOpen,
-  CheckSquare
+  CheckSquare,
+  Trash2
 } from 'lucide-react';
 
 export const roleBasedNavigation = {
@@ -71,6 +72,11 @@ export const roleBasedNavigation = {
           icon: FileCheck
         },
         {
+          name: 'Delete Requests',
+          path: '/delete-stake-holder-requests',
+          icon: Trash2
+        },
+        {
           name: 'All Request',
           path: '/all-stake-holder-request',
           icon: List
@@ -99,7 +105,7 @@ export const roleBasedNavigation = {
         },
       ]
     },
-    //{ name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
+    { name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
     //{ name: 'Cleaner Profile Book', path: '/cleaner-profile-book', icon: BookOpen },
     //{ name: 'Security Technical Issue Book', path: '/security-issue-book', icon: Bell },
     //{ name: 'Tecnician Site Book', path: '/security-technician-fill-page', icon: Bell },
@@ -110,8 +116,10 @@ export const roleBasedNavigation = {
       children: [
         { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
         { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
+        { name: 'Internship Report', path: '/internship-report', icon: FileText },
         { name: 'Guard Shift Report', path: '/guard-shift-report', icon: FileText },
-        //{name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
+        { name: 'Guard Shift Report 1', path: '/guard-shift-report-1', icon: FileText },
+        {name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
       ]
     },
     {
@@ -178,6 +186,7 @@ export const roleBasedNavigation = {
       path: '/internshipoverview',
       icon: Briefcase
     },
+    { name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
   ],
   user: [
     { 
@@ -249,7 +258,7 @@ export const roleBasedNavigation = {
       ]
     },
 
-   // { name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
+    { name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
     //{ name: 'Cleaner Profile Book', path: '/cleaner-profile-book', icon: BookOpen },
     //{ name: 'Security Technical Issue Book', path: '/security-issue-book', icon: Bell },
     //{ name: 'Tecnician Site Book', path: '/security-technician-fill-page', icon: Bell },
@@ -261,7 +270,7 @@ export const roleBasedNavigation = {
         { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
         { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
         { name: 'Guard Shift Report', path: '/guard-shift-report', icon: FileText },
-        //{name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
+        {name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
       ]
     },
   ],

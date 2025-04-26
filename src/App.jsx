@@ -31,19 +31,24 @@ import NewStakeHRequest from './pages/stakeholder/NewRequest';
 import UpdateStakeHRequests from './pages/stakeholder/UpdateRequest';
 import AllStakeHRequests from './pages/stakeholder/AllRequest';
 import StakeholderReport from './pages/report/StakeholderReport';
+import DeleteStakeHRequests from './pages/stakeholder/DeleteStakeHRequests';
+import InternshipReport from './pages/report/InternshipReport';
 
 // Service
-//import QueueManagement from './pages/security-services/control-panel/QueueManagement';
-// import SecurityServices from './pages/security-services/new-request';
+import QueueManagement from './pages/security-services/control-panel/QueueManagement';
+import SecurityServices from './pages/security-services/new-request';
 // import TaskManagement from './pages/security-services/task';
+import TasksPage from './pages/security-services/task/TaskPage';
 
 // GuardShiftForm Pages
 import GuardShiftForm from './pages/guardshift/GuardShiftForm';
 import GuardShiftReport from './pages/report/GuardShiftReport';
+import GuardShiftReport1 from './pages/report/GuardShiftReport1';
 
 // Equipment Movements 
-//import EquipmentMovementLog from './pages/equipment-movement/EquipmentMovementLog';
-//import EquipmentMovementReport from './pages/report/EquipmentMovementReport';
+import EquipmentMovementLog from './pages/equipment-movement/EquipmentMovementLog';
+import EquipmentMovementReport from './pages/report/EquipmentMovementReport';
+import EquipmentDatabaseManagement from './pages/equipment-movement/EquipmentDatabaseManagement';
 
 // Cleaner Profile Book
 //import CleanerProfileBook from './pages/cleaner-profiles/cleaner-profile-book';
@@ -195,33 +200,39 @@ const App = () => {
           <Route path="/internshipoverview" element={<ProtectedRoute requiredRoles={['admin',, 'security_guard','user']}><AuthenticatedLayout><InternshipOverview /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/all-background-checks" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><AllBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/backgroundcheckreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><BackgroundCheckReport /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/internship-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><InternshipReport /></AuthenticatedLayout></ProtectedRoute>} />
           
           {/* Stakeholder routes */}
           <Route path="/new-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><NewStakeHRequest /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/update-stake-holder-request/:id" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><UpdateStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/all-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user','user2']}><AuthenticatedLayout><AllStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/stakeholderreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><StakeholderReport /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/delete-stake-holder-requests" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><DeleteStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
 
-            {/* Security service routes */}{/*
+
+            {/* Security service routes */}
           <Route path="/security-services/control-panel/queue-management" element={<ProtectedRoute requiredRoles={['admin','user']}> <AuthenticatedLayout> <QueueManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
           
           {/* Add routes for other security service pages when they're ready */}
-           {/*
+          
           <Route path="/security-services/new-request" element={<ProtectedRoute requiredRoles={['admin', 'user']}> <AuthenticatedLayout> <SecurityServices /> </AuthenticatedLayout> </ProtectedRoute>}/>
-          <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}><AuthenticatedLayout> <TaskManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
+        {/*   <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}><AuthenticatedLayout> <TaskManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
           */}
+          <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}> <AuthenticatedLayout> <TasksPage /> </AuthenticatedLayout> </ProtectedRoute>}/>
 
           {/* GuardShift routes */}
           <Route path="/guard-shift" element={<ProtectedRoute requiredRoles={['admin','user','security_guard']}><AuthenticatedLayout><GuardShiftForm /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/guard-shift-report" element={<ProtectedRoute requiredRoles={['admin','user','standarduser']}><AuthenticatedLayout><GuardShiftReport /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="/guard-shift-report-1" element={<ProtectedRoute requiredRoles={['admin','user','standarduser']}><AuthenticatedLayout><GuardShiftReport1 /></AuthenticatedLayout></ProtectedRoute>} />
 
 
 
-          {/* Equipment Routes 
-          <Route path="/equipment-movement" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementLog /></AuthenticatedLayout></ProtectedRoute>} />
+          {/* Equipment Routes */} 
+          <Route path="/equipment-movement" element={<ProtectedRoute requiredRoles={['admin','user','security_guard']}><AuthenticatedLayout><EquipmentMovementLog /></AuthenticatedLayout></ProtectedRoute>} />
+          <Route path="Equipment-database-management" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentDatabaseManagement /></AuthenticatedLayout></ProtectedRoute>} />
           <Route path="/equipment-movement-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementReport /></AuthenticatedLayout></ProtectedRoute>} />
 
-          */}  
+           
 
             {/* Cleaners Routes 
           <Route path="/cleaner-profile-book" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><CleanerProfileBook /></AuthenticatedLayout></ProtectedRoute>} />

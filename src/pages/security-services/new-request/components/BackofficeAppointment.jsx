@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, XCircle, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -18,7 +18,7 @@ import { useFormContext } from '../context/FormContext';
 import { useAuth } from '../../../../hooks/useAuth';
 import apiService from '../../../../config/api-service';
 
-const UnblockMomoRequest = ({ onBack, serviceType }) => {
+const BackofficeAppointment = ({ onBack, serviceType }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { 
@@ -31,14 +31,38 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     setIsSubmitting,
     hasError,
     getErrorMessage,
-    generateReferenceNumber
   } = useFormContext();
   
   const [isSuccess, setIsSuccess] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState('');
-  const [momoNumberRequests, setMomoNumberRequests] = useState([
-    { number: '', date_blocked: '', account_type: '' }
-  ]);
+  const [backofficeUsers, setBackofficeUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingError, setLoadingError] = useState(null);
+
+  // Fetch backoffice users
+  useEffect(() => {
+    const fetchBackofficeUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        setLoadingError(null);
+        
+        const result = await apiService.users.getBackofficeUsers();
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        setBackofficeUsers(result.users || []);
+      } catch (error) {
+        console.error('Error fetching backoffice users:', error);
+        setLoadingError('Failed to load available staff. Please try again later.');
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    fetchBackofficeUsers();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -49,32 +73,10 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     }
   };
 
-  const handleMomoNumberRequestChange = (index, field, value) => {
-    const updatedRequests = [...momoNumberRequests];
-    updatedRequests[index][field] = value;
-    setMomoNumberRequests(updatedRequests);
-    
-    const errorKey = `momoNumberRequests.${index}.${field}`;
-    if (hasError(errorKey)) {
-      clearErrors([errorKey]);
-    }
-  };
-
-  const addMomoNumberRequest = () => {
-    setMomoNumberRequests([...momoNumberRequests, { number: '', date_blocked: '', account_type: '' }]);
-  };
-
-  const removeMomoNumberRequest = (index) => {
-    if (momoNumberRequests.length > 1) {
-      const updatedRequests = [...momoNumberRequests];
-      updatedRequests.splice(index, 1);
-      setMomoNumberRequests(updatedRequests);
-    }
-  };
-
   const validateForm = () => {
     const errors = {};
     const phoneRegex = /^07\d{8}$/;
+    const today = new Date().toISOString().split('T')[0];
 
     if (!formData.full_names) {
       errors.full_names = 'Full name is required';
@@ -90,22 +92,27 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       errors.primary_contact = 'Enter a valid phone number (07XXXXXXXX)';
     }
 
-    // Validate MoMo number requests
-    momoNumberRequests.forEach((request, index) => {
-      if (!request.number) {
-        errors[`momoNumberRequests.${index}.number`] = 'Phone number is required';
-      } else if (!phoneRegex.test(request.number)) {
-        errors[`momoNumberRequests.${index}.number`] = 'Enter a valid phone number (07XXXXXXXX)';
-      }
+    if (!formData.backoffice_user) {
+      errors.backoffice_user = 'Staff member is required';
+    }
 
-      if (!request.account_type) {
-        errors[`momoNumberRequests.${index}.account_type`] = 'Account type is required';
-      }
-    });
+    if (!formData.reason) {
+      errors.reason = 'Reason for appointment is required';
+    }
+
+    if (!formData.preferred_date) {
+      errors.preferred_date = 'Preferred date is required';
+    } else if (new Date(formData.preferred_date) < new Date(today)) {
+      errors.preferred_date = 'Date cannot be in the past';
+    }
+
+    if (!formData.preferred_time) {
+      errors.preferred_time = 'Preferred time is required';
+    }
 
     // Require additional details
     if (!formData.details) {
-      errors.details = 'Please provide details about your request';
+      errors.details = 'Please provide details about your appointment request';
     }
 
     updateFormErrors(errors);
@@ -127,9 +134,8 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     try {
       setIsSubmitting(true);
       
-      const result = await apiService.securityServices.submitUnblockMomoRequest({
+      const result = await apiService.securityServices.submitBackofficeAppointment({
         formData,
-        momoNumberRequests,
         serviceType,
         userId: user.id
       });
@@ -144,7 +150,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       toast({
         variant: "success",
         title: "Request Submitted",
-        description: "Your unblock MoMo request has been submitted successfully.",
+        description: "Your backoffice appointment request has been submitted successfully.",
       });
       
     } catch (error) {
@@ -167,9 +173,12 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       id_passport: '',
       primary_contact: '',
       secondary_contact: '',
+      backoffice_user: '',
+      preferred_date: '',
+      preferred_time: '',
+      reason: '',
       details: '',
     });
-    setMomoNumberRequests([{ number: '', date_blocked: '', account_type: '' }]);
     clearErrors();
     setIsSuccess(false);
   };
@@ -196,16 +205,16 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div>
-                    <CardTitle className="text-xl text-gray-900 dark:text-white">Unblock MoMo Account</CardTitle>
+                    <CardTitle className="text-xl text-gray-900 dark:text-white">Backoffice Appointment</CardTitle>
                     <CardDescription className="text-gray-500 dark:text-gray-400">
-                      Request to unblock your MoMo account
+                      Schedule a meeting with backoffice team
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               
               <CardContent>
-                <form id="unblock-momo-form" onSubmit={handleSubmit}>
+                <form id="backoffice-appointment-form" onSubmit={handleSubmit}>
                   <div className="space-y-6">
                     {/* Personal Information Section */}
                     <div>
@@ -279,94 +288,115 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                       </div>
                     </div>
 
-                    {/* MoMo Number Requests Section */}
+                    {/* Appointment Details Section */}
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">MoMo Accounts to Unblock</h3>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Appointment Details</h3>
                       
-                      {momoNumberRequests.map((request, index) => (
-                        <div 
-                          key={index}
-                          className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg relative"
-                        >
-                          {momoNumberRequests.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-500 hover:text-red-500"
-                              onClick={() => removeMomoNumberRequest(index)}
+                      {loadingError ? (
+                        <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-4 rounded-lg mb-4">
+                          {loadingError}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="backoffice_user">
+                              Select Staff Member <span className="text-red-500">*</span>
+                            </Label>
+                            <select
+                              id="backoffice_user"
+                              name="backoffice_user"
+                              value={formData.backoffice_user || ''}
+                              onChange={handleChange}
+                              disabled={loadingUsers || isSubmitting}
+                              className={`w-full px-3 py-2 rounded-md border 
+                                        ${hasError('backoffice_user') 
+                                          ? 'border-red-500 dark:border-red-800' 
+                                          : 'border-gray-200 dark:border-gray-700'}
+                                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                                        focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white`}
                             >
-                              <XCircle className="h-4 w-4" />
-                              <span className="sr-only">Remove</span>
-                            </Button>
-                          )}
-                          
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                            <div className="space-y-2">
-                              <Label>
-                                Phone Number <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                placeholder="07XXXXXXXX"
-                                value={request.number}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'number', e.target.value)}
-                                className={hasError(`momoNumberRequests.${index}.number`) ? 'border-red-500 dark:border-red-800' : ''}
-                                disabled={isSubmitting}
-                              />
-                              {hasError(`momoNumberRequests.${index}.number`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.number`)}</p>
-                              )}
-                            </div>
+                              <option value="">
+                                {loadingUsers ? 'Loading staff members...' : 'Select a staff member'}
+                              </option>
+                              {backofficeUsers.map(staffMember => (
+                                <option key={staffMember.id} value={staffMember.id}>
+                                  {staffMember.fullname}
+                                </option>
+                              ))}
+                            </select>
+                            {hasError('backoffice_user') && (
+                              <p className="text-sm text-red-500">{getErrorMessage('backoffice_user')}</p>
+                            )}
+                          </div>
 
-                            <div className="space-y-2">
-                              <Label>Date Blocked</Label>
-                              <Input
-                                type="date"
-                                value={request.date_blocked}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'date_blocked', e.target.value)}
-                                disabled={isSubmitting}
-                              />
-                            </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="reason">
+                              Reason for Meeting <span className="text-red-500">*</span>
+                            </Label>
+                            <select
+                              id="reason"
+                              name="reason"
+                              value={formData.reason || ''}
+                              onChange={handleChange}
+                              disabled={isSubmitting}
+                              className={`w-full px-3 py-2 rounded-md border 
+                                        ${hasError('reason') 
+                                          ? 'border-red-500 dark:border-red-800' 
+                                          : 'border-gray-200 dark:border-gray-700'}
+                                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                                        focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white`}
+                            >
+                              <option value="">Select reason for appointment</option>
+                              <option value="account_issue">Account Issue</option>
+                              <option value="billing_problem">Billing Problem</option>
+                              <option value="service_activation">Service Activation</option>
+                              <option value="contract_renewal">Contract Renewal</option>
+                              <option value="complaint">File a Complaint</option>
+                              <option value="other">Other (Please specify in details)</option>
+                            </select>
+                            {hasError('reason') && (
+                              <p className="text-sm text-red-500">{getErrorMessage('reason')}</p>
+                            )}
+                          </div>
 
-                            <div className="space-y-2">
-                              <Label>
-                                Account Type <span className="text-red-500">*</span>
-                              </Label>
-                              <select
-                                value={request.account_type}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'account_type', e.target.value)}
-                                className={`w-full px-3 py-2 rounded-md border 
-                                          ${hasError(`momoNumberRequests.${index}.account_type`) 
-                                            ? 'border-red-500 dark:border-red-800' 
-                                            : 'border-gray-200 dark:border-gray-700'}
-                                          bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                                          focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white`}
-                                disabled={isSubmitting}
-                              >
-                                <option value="">Select Account Type</option>
-                                <option value="company">Company Account</option>
-                                <option value="normal">Normal Account</option>
-                                <option value="momopay">MoMoPay</option>
-                                <option value="agent">MTN Agent</option>
-                              </select>
-                              {hasError(`momoNumberRequests.${index}.account_type`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.account_type`)}</p>
-                              )}
-                            </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="preferred_date">
+                              Preferred Date <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                              id="preferred_date"
+                              type="date"
+                              name="preferred_date"
+                              min={new Date().toISOString().split('T')[0]}
+                              value={formData.preferred_date || ''}
+                              onChange={handleChange}
+                              className={hasError('preferred_date') ? 'border-red-500 dark:border-red-800' : ''}
+                              disabled={isSubmitting}
+                            />
+                            {hasError('preferred_date') && (
+                              <p className="text-sm text-red-500">{getErrorMessage('preferred_date')}</p>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="preferred_time">
+                            Preferred Time <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                              id="preferred_time"
+                              type="time"
+                              name="preferred_time"
+                              value={formData.preferred_time || ''}
+                              onChange={handleChange}
+                              className={hasError('preferred_time') ? 'border-red-500 dark:border-red-800' : ''}
+                              disabled={isSubmitting}
+                            />
+                            {hasError('preferred_time') && (
+                              <p className="text-sm text-red-500">{getErrorMessage('preferred_time')}</p>
+                            )}
                           </div>
                         </div>
-                      ))}
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={addMomoNumberRequest}
-                        disabled={isSubmitting}
-                        className="w-full mt-2"
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        Add Another MoMo Number
-                      </Button>
+                      )}
                     </div>
 
                     {/* Additional Details Section */}
@@ -378,7 +408,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                         id="details"
                         name="details"
                         rows={4}
-                        placeholder="Explain why your MoMo account is blocked"
+                        placeholder="Provide more context about your appointment request"
                         value={formData.details || ''}
                         onChange={handleChange}
                         className={hasError('details') ? 'border-red-500 dark:border-red-800' : ''}
@@ -401,9 +431,9 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                           <h3 className="text-sm font-medium">Important Note</h3>
                           <div className="mt-2 text-sm">
                             <p>
-                              This service is strictly for unblocking MoMo accounts 
-                              registered under the requestor's name. Fraudulent requests 
-                              will be reported to the appropriate authorities.
+                              Appointment requests are subject to staff availability. 
+                              You will receive a confirmation once your appointment is scheduled. 
+                              Please arrive 15 minutes before your scheduled time with proper identification.
                             </p>
                           </div>
                         </div>
@@ -418,14 +448,14 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                   type="button"
                   variant="outline"
                   onClick={onBack}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || loadingUsers}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  form="unblock-momo-form"
-                  disabled={isSubmitting}
+                  form="backoffice-appointment-form"
+                  disabled={isSubmitting || loadingUsers}
                 >
                   {isSubmitting ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -449,7 +479,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Request Submitted Successfully!</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
-              Your unblock MoMo request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
+              Your backoffice appointment request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
             </p>
             <div className="space-x-4">
               <Button
@@ -473,4 +503,4 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
   );
 };
 
-export default UnblockMomoRequest;
+export default BackofficeAppointment;

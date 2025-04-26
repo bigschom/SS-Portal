@@ -18,7 +18,7 @@ import { useFormContext } from '../context/FormContext';
 import { useAuth } from '../../../../hooks/useAuth';
 import apiService from '../../../../config/api-service';
 
-const UnblockMomoRequest = ({ onBack, serviceType }) => {
+const StolenPhoneCheck = ({ onBack, serviceType }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { 
@@ -36,8 +36,8 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
   
   const [isSuccess, setIsSuccess] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState('');
-  const [momoNumberRequests, setMomoNumberRequests] = useState([
-    { number: '', date_blocked: '', account_type: '' }
+  const [imeiRequests, setImeiRequests] = useState([
+    { imei_number: '' }
   ]);
 
   const handleChange = (e) => {
@@ -49,32 +49,33 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     }
   };
 
-  const handleMomoNumberRequestChange = (index, field, value) => {
-    const updatedRequests = [...momoNumberRequests];
+  const handleImeiRequestChange = (index, field, value) => {
+    const updatedRequests = [...imeiRequests];
     updatedRequests[index][field] = value;
-    setMomoNumberRequests(updatedRequests);
+    setImeiRequests(updatedRequests);
     
-    const errorKey = `momoNumberRequests.${index}.${field}`;
+    const errorKey = `imeiRequests.${index}.${field}`;
     if (hasError(errorKey)) {
       clearErrors([errorKey]);
     }
   };
 
-  const addMomoNumberRequest = () => {
-    setMomoNumberRequests([...momoNumberRequests, { number: '', date_blocked: '', account_type: '' }]);
+  const addImeiRequest = () => {
+    setImeiRequests([...imeiRequests, { imei_number: '' }]);
   };
 
-  const removeMomoNumberRequest = (index) => {
-    if (momoNumberRequests.length > 1) {
-      const updatedRequests = [...momoNumberRequests];
+  const removeImeiRequest = (index) => {
+    if (imeiRequests.length > 1) {
+      const updatedRequests = [...imeiRequests];
       updatedRequests.splice(index, 1);
-      setMomoNumberRequests(updatedRequests);
+      setImeiRequests(updatedRequests);
     }
   };
 
   const validateForm = () => {
     const errors = {};
     const phoneRegex = /^07\d{8}$/;
+    const imeiRegex = /^\d{15}$/;
 
     if (!formData.full_names) {
       errors.full_names = 'Full name is required';
@@ -90,23 +91,14 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       errors.primary_contact = 'Enter a valid phone number (07XXXXXXXX)';
     }
 
-    // Validate MoMo number requests
-    momoNumberRequests.forEach((request, index) => {
-      if (!request.number) {
-        errors[`momoNumberRequests.${index}.number`] = 'Phone number is required';
-      } else if (!phoneRegex.test(request.number)) {
-        errors[`momoNumberRequests.${index}.number`] = 'Enter a valid phone number (07XXXXXXXX)';
-      }
-
-      if (!request.account_type) {
-        errors[`momoNumberRequests.${index}.account_type`] = 'Account type is required';
+    // Validate IMEI requests
+    imeiRequests.forEach((request, index) => {
+      if (!request.imei_number) {
+        errors[`imeiRequests.${index}.imei_number`] = 'IMEI number is required';
+      } else if (!imeiRegex.test(request.imei_number)) {
+        errors[`imeiRequests.${index}.imei_number`] = 'Enter a valid 15-digit IMEI number';
       }
     });
-
-    // Require additional details
-    if (!formData.details) {
-      errors.details = 'Please provide details about your request';
-    }
 
     updateFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -127,9 +119,9 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     try {
       setIsSubmitting(true);
       
-      const result = await apiService.securityServices.submitUnblockMomoRequest({
+      const result = await apiService.securityServices.submitStolenPhoneCheck({
         formData,
-        momoNumberRequests,
+        imeiRequests,
         serviceType,
         userId: user.id
       });
@@ -144,7 +136,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       toast({
         variant: "success",
         title: "Request Submitted",
-        description: "Your unblock MoMo request has been submitted successfully.",
+        description: "Your stolen phone check request has been submitted successfully.",
       });
       
     } catch (error) {
@@ -169,10 +161,11 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       secondary_contact: '',
       details: '',
     });
-    setMomoNumberRequests([{ number: '', date_blocked: '', account_type: '' }]);
+    setImeiRequests([{ imei_number: '' }]);
     clearErrors();
     setIsSuccess(false);
   };
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <div className="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -196,16 +189,16 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div>
-                    <CardTitle className="text-xl text-gray-900 dark:text-white">Unblock MoMo Account</CardTitle>
+                    <CardTitle className="text-xl text-gray-900 dark:text-white">Stolen Phone Check</CardTitle>
                     <CardDescription className="text-gray-500 dark:text-gray-400">
-                      Request to unblock your MoMo account
+                      Check the status of a potentially stolen phone
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               
               <CardContent>
-                <form id="unblock-momo-form" onSubmit={handleSubmit}>
+                <form id="stolen-phone-form" onSubmit={handleSubmit}>
                   <div className="space-y-6">
                     {/* Personal Information Section */}
                     <div>
@@ -279,78 +272,42 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                       </div>
                     </div>
 
-                    {/* MoMo Number Requests Section */}
+                    {/* IMEI Numbers Section */}
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">MoMo Accounts to Unblock</h3>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">IMEI Numbers</h3>
                       
-                      {momoNumberRequests.map((request, index) => (
+                      {imeiRequests.map((request, index) => (
                         <div 
                           key={index}
                           className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg relative"
                         >
-                          {momoNumberRequests.length > 1 && (
+                          {imeiRequests.length > 1 && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-500 hover:text-red-500"
-                              onClick={() => removeMomoNumberRequest(index)}
+                              onClick={() => removeImeiRequest(index)}
                             >
                               <XCircle className="h-4 w-4" />
                               <span className="sr-only">Remove</span>
                             </Button>
                           )}
                           
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-1">
                             <div className="space-y-2">
                               <Label>
-                                Phone Number <span className="text-red-500">*</span>
+                                IMEI Number <span className="text-red-500">*</span>
                               </Label>
                               <Input
-                                placeholder="07XXXXXXXX"
-                                value={request.number}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'number', e.target.value)}
-                                className={hasError(`momoNumberRequests.${index}.number`) ? 'border-red-500 dark:border-red-800' : ''}
+                                placeholder="Enter 15-digit IMEI number"
+                                value={request.imei_number}
+                                onChange={(e) => handleImeiRequestChange(index, 'imei_number', e.target.value)}
+                                className={hasError(`imeiRequests.${index}.imei_number`) ? 'border-red-500 dark:border-red-800' : ''}
                                 disabled={isSubmitting}
                               />
-                              {hasError(`momoNumberRequests.${index}.number`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.number`)}</p>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Date Blocked</Label>
-                              <Input
-                                type="date"
-                                value={request.date_blocked}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'date_blocked', e.target.value)}
-                                disabled={isSubmitting}
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>
-                                Account Type <span className="text-red-500">*</span>
-                              </Label>
-                              <select
-                                value={request.account_type}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'account_type', e.target.value)}
-                                className={`w-full px-3 py-2 rounded-md border 
-                                          ${hasError(`momoNumberRequests.${index}.account_type`) 
-                                            ? 'border-red-500 dark:border-red-800' 
-                                            : 'border-gray-200 dark:border-gray-700'}
-                                          bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                                          focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white`}
-                                disabled={isSubmitting}
-                              >
-                                <option value="">Select Account Type</option>
-                                <option value="company">Company Account</option>
-                                <option value="normal">Normal Account</option>
-                                <option value="momopay">MoMoPay</option>
-                                <option value="agent">MTN Agent</option>
-                              </select>
-                              {hasError(`momoNumberRequests.${index}.account_type`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.account_type`)}</p>
+                              {hasError(`imeiRequests.${index}.imei_number`) && (
+                                <p className="text-sm text-red-500">{getErrorMessage(`imeiRequests.${index}.imei_number`)}</p>
                               )}
                             </div>
                           </div>
@@ -360,33 +317,27 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={addMomoNumberRequest}
+                        onClick={addImeiRequest}
                         disabled={isSubmitting}
                         className="w-full mt-2"
                       >
                         <Save className="h-4 w-4 mr-2" />
-                        Add Another MoMo Number
+                        Add Another IMEI Number
                       </Button>
                     </div>
 
                     {/* Additional Details Section */}
                     <div className="space-y-2">
-                      <Label htmlFor="details">
-                        Additional Details <span className="text-red-500">*</span>
-                      </Label>
+                      <Label htmlFor="details">Additional Details</Label>
                       <Textarea
                         id="details"
                         name="details"
                         rows={4}
-                        placeholder="Explain why your MoMo account is blocked"
+                        placeholder="Any additional information that might help with your request"
                         value={formData.details || ''}
                         onChange={handleChange}
-                        className={hasError('details') ? 'border-red-500 dark:border-red-800' : ''}
                         disabled={isSubmitting}
                       />
-                      {hasError('details') && (
-                        <p className="text-sm text-red-500">{getErrorMessage('details')}</p>
-                      )}
                     </div>
 
                     {/* Important Note */}
@@ -401,9 +352,9 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                           <h3 className="text-sm font-medium">Important Note</h3>
                           <div className="mt-2 text-sm">
                             <p>
-                              This service is strictly for unblocking MoMo accounts 
-                              registered under the requestor's name. Fraudulent requests 
-                              will be reported to the appropriate authorities.
+                              This service is strictly for verifying the status of phones 
+                              registered under the requestor's name. Fraudulent requests will 
+                              be reported to the appropriate authorities.
                             </p>
                           </div>
                         </div>
@@ -424,7 +375,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                 </Button>
                 <Button
                   type="submit"
-                  form="unblock-momo-form"
+                  form="stolen-phone-form"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
@@ -445,11 +396,11 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
             className="text-center py-16"
           >
             <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-4">
-              <Save className="w-8 h-8 text-green-600 dark:text-green-300" />
+              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-300" />
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Request Submitted Successfully!</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
-              Your unblock MoMo request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
+              Your stolen phone check request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
             </p>
             <div className="space-x-4">
               <Button
@@ -461,7 +412,6 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
               </Button>
               <Button
                 onClick={handleNewRequest}
-                className="bg-black text-white dark:bg-white dark:text-black"
               >
                 New Request
               </Button>
@@ -473,4 +423,4 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
   );
 };
 
-export default UnblockMomoRequest;
+export default StolenPhoneCheck;

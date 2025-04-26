@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -54,12 +53,13 @@ const EquipmentMovementModal = ({ isOpen, onClose, onSubmit, initialData = null 
     item_name: '',
     item_description: '',
     serial_number: '',
+    tag_number: '',
     quantity: 1,
     movement_type: 'out', // 'in' or 'out'
     carried_by: '',
     authorized_by: '',
-    destination: '',
-    expected_return_date: '',
+    destination_from: '',
+    destination_to: '',
     notes: '',
     status: 'pending_return' // 'pending_return', 'returned', 'approved_non_return'
   });
@@ -70,16 +70,7 @@ const EquipmentMovementModal = ({ isOpen, onClose, onSubmit, initialData = null 
     if (initialData) {
       setFormData({
         ...initialData,
-        expected_return_date: initialData.expected_return_date ? 
-          new Date(initialData.expected_return_date).toISOString().split('T')[0] : ''
-      });
-    } else {
-      // Set default date to tomorrow for expected return
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      setFormData({
-        ...formData,
-        expected_return_date: tomorrow.toISOString().split('T')[0]
+        tag_number: initialData.tag_number || ''
       });
     }
   }, [initialData]);
@@ -90,12 +81,8 @@ const EquipmentMovementModal = ({ isOpen, onClose, onSubmit, initialData = null 
     if (!formData.item_name) newErrors.item_name = 'Item name is required';
     if (!formData.carried_by) newErrors.carried_by = 'Carrier name is required';
     if (!formData.authorized_by) newErrors.authorized_by = 'Authorization is required';
-    if (formData.movement_type === 'out' && !formData.destination) {
-      newErrors.destination = 'Destination is required for outgoing items';
-    }
-    if (formData.movement_type === 'out' && !formData.expected_return_date) {
-      newErrors.expected_return_date = 'Expected return date is required';
-    }
+    if (!formData.destination_from) newErrors.destination_from = 'Destination From is required';
+    if (!formData.destination_to) newErrors.destination_to = 'Destination To is required';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -222,6 +209,22 @@ const EquipmentMovementModal = ({ isOpen, onClose, onSubmit, initialData = null 
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                TAG Number
+              </label>
+              <input
+                type="text"
+                name="tag_number"
+                value={formData.tag_number}
+                onChange={handleChange}
+                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 
+                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                        focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white focus:border-transparent"
+                placeholder="Enter TAG number (if applicable)"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Quantity
               </label>
               <input
@@ -276,48 +279,45 @@ const EquipmentMovementModal = ({ isOpen, onClose, onSubmit, initialData = null 
               )}
             </div>
 
-            {formData.movement_type === 'out' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Destination*
-                  </label>
-                  <input
-                    type="text"
-                    name="destination"
-                    value={formData.destination}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-2 rounded-lg border 
-                              ${errors.destination ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}
-                              bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                              focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white focus:border-transparent`}
-                    placeholder="Where is the item going?"
-                  />
-                  {errors.destination && (
-                    <p className="mt-1 text-sm text-red-500">{errors.destination}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Expected Return Date*
-                  </label>
-                  <input
-                    type="date"
-                    name="expected_return_date"
-                    value={formData.expected_return_date}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-2 rounded-lg border 
-                              ${errors.expected_return_date ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}
-                              bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                              focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white focus:border-transparent`}
-                  />
-                  {errors.expected_return_date && (
-                    <p className="mt-1 text-sm text-red-500">{errors.expected_return_date}</p>
-                  )}
-                </div>
-              </>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Destination From*
+              </label>
+              <input
+                type="text"
+                name="destination_from"
+                value={formData.destination_from}
+                onChange={handleChange}
+                className={`w-full px-4 py-2 rounded-lg border 
+                          ${errors.destination_from ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}
+                          bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                          focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white focus:border-transparent`}
+                placeholder="Origin of the item"
+              />
+              {errors.destination_from && (
+                <p className="mt-1 text-sm text-red-500">{errors.destination_from}</p>
+              )}
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Destination To*
+              </label>
+              <input
+                type="text"
+                name="destination_to"
+                value={formData.destination_to}
+                onChange={handleChange}
+                className={`w-full px-4 py-2 rounded-lg border 
+                          ${errors.destination_to ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'}
+                          bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                          focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white focus:border-transparent`}
+                placeholder="Final destination of the item"
+              />
+              {errors.destination_to && (
+                <p className="mt-1 text-sm text-red-500">{errors.destination_to}</p>
+              )}
+            </div>
 
             {initialData && (
               <div>
@@ -434,9 +434,11 @@ const EquipmentMovementLog = () => {
         log =>
           log.item_name.toLowerCase().includes(searchLower) ||
           log.serial_number?.toLowerCase().includes(searchLower) ||
+          log.tag_number?.toLowerCase().includes(searchLower) ||
           log.carried_by.toLowerCase().includes(searchLower) ||
           log.authorized_by.toLowerCase().includes(searchLower) ||
-          log.destination?.toLowerCase().includes(searchLower)
+          log.destination_from?.toLowerCase().includes(searchLower) ||
+          log.destination_to?.toLowerCase().includes(searchLower)
       );
     }
     
@@ -682,6 +684,12 @@ const EquipmentMovementLog = () => {
                       Authorized By
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Destination From
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      Destination To
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Status
                     </th>
                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -706,6 +714,11 @@ const EquipmentMovementLog = () => {
                         {log.serial_number && (
                           <div className="text-sm text-gray-500 dark:text-gray-400">
                             SN: {log.serial_number}
+                          </div>
+                        )}
+                        {log.tag_number && (
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            TAG: {log.tag_number}
                           </div>
                         )}
                       </td>

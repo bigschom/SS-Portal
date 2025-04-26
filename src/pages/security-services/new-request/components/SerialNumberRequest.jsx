@@ -16,8 +16,8 @@ import {
 } from '../../../../components/ui/card';
 import { useToast } from '../../../../components/ui/use-toast';
 import { useFormContext } from '../context/FormContext';
-import { useAuth } from '@/hooks/useAuth';
-import { db } from '@/config/db';
+import { useAuth } from '../../../../hooks/useAuth';
+import apiService from '../../../../config/api-service';
 
 const SerialNumberRequest = ({ onBack, serviceType }) => {
   const { toast } = useToast();
@@ -140,66 +140,23 @@ const SerialNumberRequest = ({ onBack, serviceType }) => {
       });
       return;
     }
-
+  
     try {
       setIsSubmitting(true);
       
-      // Generate reference number
-      const ref = generateReferenceNumber(serviceType);
-      setReferenceNumber(ref);
-      
-      // Use a transaction to ensure all operations succeed or fail together
-      await db.transaction(async (client) => {
-        // Create main service request
-        const { rows: [request] } = await client.query(`
-          INSERT INTO service_requests (
-            reference_number, service_type, status, created_by, 
-            full_names, id_passport, primary_contact, secondary_contact, details, created_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-          RETURNING id
-        `, [
-          ref,
-          serviceType,
-          'new',
-          user.id,
-          formData.full_names,
-          formData.id_passport,
-          formData.primary_contact,
-          formData.secondary_contact || null,
-          formData.details || null
-        ]);
-        
-        // Insert phone requests
-        for (const phoneRequest of phoneRequests) {
-          await client.query(`
-            INSERT INTO request_phone_numbers (
-              request_id, phone_number, phone_brand, start_date, end_date
-            ) VALUES ($1, $2, $3, $4, $5)
-          `, [
-            request.id,
-            phoneRequest.phone_number,
-            phoneRequest.phone_brand,
-            phoneRequest.start_date,
-            phoneRequest.end_date
-          ]);
-        }
-        
-        // Create history record
-        await client.query(`
-          INSERT INTO request_history (
-            request_id, action, status_from, status_to, performed_by, details
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-        `, [
-          request.id,
-          'created',
-          null,
-          'new',
-          user.id,
-          'Request created'
-        ]);
+      // Use the API service instead of direct DB calls
+      const result = await apiService.securityServices.submitSerialNumberRequest({
+        formData,
+        phoneRequests,
+        serviceType,
+        userId: user.id
       });
       
-      // Show success state
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      setReferenceNumber(result.referenceNumber);
       setIsSuccess(true);
       
       toast({

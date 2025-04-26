@@ -2,6 +2,7 @@
 import axios from 'axios';
 import departments, { getActiveDepartments } from '../constants/departments.js';
 import { ROLE_TYPES } from '../constants/roleTypes.js';
+import { debounce, throttle } from '../utils/helpers.js';
 
 // Set base URL from environment variable
 let API_URL = import.meta.env.VITE_API_URL;
@@ -618,7 +619,50 @@ const stakeholderRequests = {
       }
       return { error: error.message };
     }
+  },
+
+  /**
+ * Delete multiple stakeholder requests at once
+ * @param {Array} ids - Array of request IDs to delete
+ * @param {number} userId - ID of the user performing the deletion
+ * @returns {Promise<Object>} - Result of the deletion operation
+ */
+async deleteMultiple(ids, userId) {
+  try {
+    console.log('API service: Deleting multiple stakeholder requests:', ids);
+    const response = await apiClient.post('/stakeholder-requests/delete-multiple', {
+      ids: ids,
+      deleted_by: userId
+    });
+    return response.data;
+  } catch (error) {
+    console.error('API Error deleting multiple requests:', error);
+    if (error.response) {
+      return { error: error.response.data.error };
+    }
+    return { error: error.message };
   }
+},
+
+/**
+ * Delete a single stakeholder request
+ * @param {number} id - ID of the request to delete
+ * @param {number} userId - ID of the user performing the deletion
+ * @returns {Promise<Object>} - Result of the deletion operation
+ */
+async deleteRequest(id, userId) {
+  try {
+    console.log('API service: Deleting stakeholder request:', id);
+    const response = await apiClient.delete(`/stakeholder-requests/${id}?deleted_by=${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('API Error deleting request:', error);
+    if (error.response) {
+      return { error: error.response.data.error };
+    }
+    return { error: error.message };
+  }
+}
 };
 
 // Guard Shift reports API endpoints
@@ -831,6 +875,504 @@ const guardShiftReports = {
   }
 };
 
+
+
+// Security services related endpoints
+const securityServices = {
+  async getAvailableServices() {
+    try {
+      const response = await apiClient.get('/security-services');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  },
+
+  async getUserServicePermissions(userId) {
+    try {
+      const response = await apiClient.get(`/security-services/permissions/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  },
+  
+  async submitSerialNumberRequest(requestData) {
+    try {
+      const response = await apiClient.post('/security-services/serial-number-request', requestData);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting serial number request:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  },
+  
+  async submitStolenPhoneCheck(requestData) {
+    try {
+      const response = await apiClient.post('/security-services/stolen-phone-check', requestData);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting stolen phone check:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  },
+  
+  async submitMomoTransactionRequest(requestData) {
+    try {
+      const response = await apiClient.post('/security-services/momo-transaction', requestData);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting MoMo transaction request:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  },
+  
+  async submitMoneyRefundRequest(requestData) {
+    try {
+      const response = await apiClient.post('/security-services/money-refund', requestData);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting money refund request:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  },
+  
+  async submitUnblockMomoRequest(requestData) {
+    try {
+      const response = await apiClient.post('/security-services/unblock-momo', requestData);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting unblock MoMo request:', error);
+      if (error.response) {
+        return { error: error.response.data.error };
+      }
+      return { error: error.message };
+    }
+  }
+};
+
+// Queue management related endpoints
+const queue = {
+  async getHandlers() {
+    try {
+      const response = await apiClient.get('/queue/handlers');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching handlers:', error);
+      return [];
+    }
+  },
+  
+  async getRequests() {
+    try {
+      const response = await apiClient.get('/queue/requests');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+      return [];
+    }
+  },
+  
+  async assignHandler(serviceType, userId) {
+    try {
+      const response = await apiClient.post('/queue/handlers', {
+        service_type: serviceType,
+        user_id: userId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error assigning handler:', error);
+      throw error;
+    }
+  },
+  
+  async removeHandler(id) {
+    try {
+      const response = await apiClient.delete(`/queue/handlers/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error removing handler:', error);
+      throw error;
+    }
+  },
+  
+  async assignRequestToHandler(requestId, userId) {
+    try {
+      const response = await apiClient.put(`/queue/requests/${requestId}/assign`, {
+        user_id: userId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error assigning request:', error);
+      throw error;
+    }
+  },
+  
+  async markRequestUnableToHandle(requestId) {
+    try {
+      const response = await apiClient.put(`/queue/requests/${requestId}/unable-to-handle`);
+      return response.data;
+    } catch (error) {
+      console.error('Error marking request:', error);
+      throw error;
+    }
+  },
+  
+  async markRequestCompleted(requestId) {
+    try {
+      const response = await apiClient.put(`/queue/requests/${requestId}/complete`);
+      return response.data;
+    } catch (error) {
+      console.error('Error completing request:', error);
+      throw error;
+    }
+  },
+  
+  async markRequestInvestigating(requestId) {
+    try {
+      const response = await apiClient.put(`/queue/requests/${requestId}/investigate`);
+      return response.data;
+    } catch (error) {
+      console.error('Error marking request for investigation:', error);
+      throw error;
+    }
+  },
+  
+  async sendBackRequest(requestId) {
+    try {
+      const response = await apiClient.put(`/queue/requests/${requestId}/send-back`);
+      return response.data;
+    } catch (error) {
+      console.error('Error sending back request:', error);
+      throw error;
+    }
+  },
+
+  async getHandlersByServiceType(serviceType) {
+    try {
+      const response = await apiClient.get(`/queue/handlers/by-service/${serviceType}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching handlers for service type ${serviceType}:`, error);
+      return [];
+    }
+  }
+};
+
+
+// Notifications API Methods
+const notifications = {
+  getUserNotificationSettings: async (userId) => {
+    try {
+      const response = await apiClient.get(`/notifications/settings/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching notification settings:', error);
+      return {
+        browserEnabled: true,
+        smsEnabled: false,
+        emailEnabled: true
+      };
+    }
+  },
+  
+  updateNotificationSettings: async (userId, settings) => {
+    try {
+      const response = await apiClient.put(`/notifications/settings/${userId}`, settings);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating notification settings:', error);
+      return { success: false, error: error.message };
+    }
+  }
+  
+  /* SMS service to be implemented later
+  sendSmsNotification: async (phoneNumber, message) => {
+    try {
+      const response = await apiClient.post('/notifications/sms', {
+        phoneNumber,
+        message
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error sending SMS notification:', error);
+      return { success: false, error: error.message };
+    }
+  }
+  */
+};
+
+
+
+// Create a request queue manager with fixed recursion issue
+const requestQueue = {
+  queue: [],
+  inProgress: new Map(),
+  maxConcurrent: 3, // Maximum concurrent requests
+  processingDelay: 300, // Delay between processing batches (ms)
+  
+  enqueue(key, promiseFactory) {
+    return new Promise((resolve, reject) => {
+      // If this exact request is already in progress, return that promise
+      if (this.inProgress.has(key)) {
+        return this.inProgress.get(key).then(resolve).catch(reject);
+      }
+      
+      // Create the request promise - FIXED to prevent recursion
+      const executeRequest = async () => {
+        try {
+          // Store the promise itself, not the function creating the promise
+          const promise = promiseFactory();
+          this.inProgress.set(key, promise);
+          
+          const result = await promise;
+          resolve(result);
+          return result;
+        } catch (error) {
+          reject(error);
+          throw error;
+        } finally {
+          this.inProgress.delete(key);
+          this.processQueue();
+        }
+      };
+      
+      // Add to queue if we're at max concurrent requests
+      if (this.inProgress.size >= this.maxConcurrent) {
+        this.queue.push({ key, execute: executeRequest, resolve, reject });
+      } else {
+        // Execute immediately if under the limit
+        executeRequest();
+      }
+    });
+  },
+  
+  processQueue() {
+    if (this.queue.length === 0 || this.inProgress.size >= this.maxConcurrent) return;
+    
+    // Process next item in queue
+    const nextItem = this.queue.shift();
+    nextItem.execute();
+    
+    // Schedule next processing
+    if (this.queue.length > 0) {
+      setTimeout(() => this.processQueue(), this.processingDelay);
+    }
+  }
+};
+
+// Add a request cache to prevent duplicate requests
+const requestCache = {
+  cache: new Map(),
+  ttl: 30000, // Default TTL: 30 seconds
+  
+  async get(key, promiseFactory, customTtl = null) {
+    const now = Date.now();
+    const cached = this.cache.get(key);
+    
+    // Return cached value if valid
+    if (cached && now - cached.timestamp < (customTtl || this.ttl)) {
+      return cached.data;
+    }
+    
+    // Generate a cache key for the request queue
+    const queueKey = `request_${key}`;
+    
+    // Execute request through the queue
+    try {
+      const data = await requestQueue.enqueue(queueKey, () => promiseFactory());
+      
+      // Cache the result
+      this.cache.set(key, {
+        data,
+        timestamp: now
+      });
+      
+      return data;
+    } catch (error) {
+      // If error, still cache error response but with shorter TTL
+      if (error.response) {
+        this.cache.set(key, {
+          data: { error: error.response.data?.error || 'Request failed' },
+          timestamp: now - (this.ttl - 5000) // Shorter TTL for errors
+        });
+      }
+      throw error;
+    }
+  },
+  
+  invalidate(key) {
+    this.cache.delete(key);
+  },
+  
+  clear() {
+    this.cache.clear();
+  }
+};
+
+// Tasks API Methods - Fixed implementation
+const tasks = {
+  getAvailableRequests: async (userId) => {
+    try {
+      const cacheKey = `available_requests_${userId}`;
+      return await requestCache.get(cacheKey, async () => {
+        const response = await apiClient.get(`/tasks/available/${userId}`);
+        return response.data;
+      });
+    } catch (error) {
+      console.error('Error fetching available requests:', error);
+      return [];
+    }
+  },
+  
+  getAssignedRequests: async (userId, status = null) => {
+    try {
+      const cacheKey = `assigned_requests_${userId}_${status || 'all'}`;
+      return await requestCache.get(cacheKey, async () => {
+        let url = `/tasks/assigned/${userId}`;
+        if (status) {
+          url += `?status=${status}`;
+        }
+        const response = await apiClient.get(url);
+        return response.data;
+      });
+    } catch (error) {
+      console.error('Error fetching assigned requests:', error);
+      return [];
+    }
+  },
+  
+  getSubmittedRequests: async (userId) => {
+    try {
+      const cacheKey = `submitted_requests_${userId}`;
+      return await requestCache.get(cacheKey, async () => {
+        const response = await apiClient.get(`/tasks/submitted/${userId}`);
+        return response.data;
+      });
+    } catch (error) {
+      console.error('Error fetching submitted requests:', error);
+      return [];
+    }
+  },
+  
+  getSentBackRequests: async (userId) => {
+    try {
+      const cacheKey = `sent_back_requests_${userId}`;
+      return await requestCache.get(cacheKey, async () => {
+        const response = await apiClient.get(`/tasks/sent-back/${userId}`);
+        return response.data;
+      });
+    } catch (error) {
+      console.error('Error fetching sent back requests:', error);
+      return [];
+    }
+  },
+  
+  getNewRequestsSince: async (timestamp, userId) => {
+    try {
+      // Don't cache this one as it's time-sensitive
+      const response = await apiClient.get(`/tasks/new-since/${timestamp}?userId=${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching new requests:', error);
+      return [];
+    }
+  },
+  
+  getStatusChangesSince: async (timestamp, userId) => {
+    try {
+      // Don't cache this one as it's time-sensitive
+      const response = await apiClient.get(`/tasks/status-changes/${timestamp}?userId=${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching status changes:', error);
+      return [];
+    }
+  },
+  
+  claimRequest: async (requestId, userId) => {
+    try {
+      const response = await apiClient.post(`/tasks/claim/${requestId}`, { userId });
+      // Invalidate relevant caches after a successful claim
+      requestCache.invalidate(`available_requests_${userId}`);
+      requestCache.invalidate(`assigned_requests_${userId}_all`);
+      return response.data;
+    } catch (error) {
+      console.error('Error claiming request:', error);
+      throw error;
+    }
+  },
+  
+  updateRequestStatus: async (requestId, status, userId, additionalData = {}) => {
+    try {
+      const response = await apiClient.put(`/tasks/status/${requestId}`, {
+        status,
+        userId,
+        ...additionalData
+      });
+      
+      // Invalidate all caches for this user after status change
+      requestCache.invalidate(`available_requests_${userId}`);
+      requestCache.invalidate(`assigned_requests_${userId}_all`);
+      requestCache.invalidate(`assigned_requests_${userId}_completed`);
+      requestCache.invalidate(`submitted_requests_${userId}`);
+      requestCache.invalidate(`sent_back_requests_${userId}`);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error updating request status:', error);
+      throw error;
+    }
+  },
+  
+  addComment: async (requestId, userId, comment, isSendBackReason = false) => {
+    try {
+      const response = await apiClient.post(`/tasks/comment/${requestId}`, {
+        userId,
+        comment,
+        isSendBackReason
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      throw error;
+    }
+  },
+  
+  updateRequestData: async (requestId, data) => {
+    try {
+      const response = await apiClient.put(`/tasks/data/${requestId}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating request data:', error);
+      throw error;
+    }
+  }
+};
+
+
+
+
 export default {
   auth,
   users,
@@ -838,5 +1380,10 @@ export default {
   activityLog,
   stakeholderRequests,
   guardShifts,
-  guardShiftReports
+  guardShiftReports,
+  securityServices,
+  queue,
+  notifications,
+  tasks,
+  apiClient
 };

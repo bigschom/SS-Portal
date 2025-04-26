@@ -18,7 +18,7 @@ import { useFormContext } from '../context/FormContext';
 import { useAuth } from '../../../../hooks/useAuth';
 import apiService from '../../../../config/api-service';
 
-const UnblockMomoRequest = ({ onBack, serviceType }) => {
+const UnblockCallRequest = ({ onBack, serviceType }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { 
@@ -36,8 +36,8 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
   
   const [isSuccess, setIsSuccess] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState('');
-  const [momoNumberRequests, setMomoNumberRequests] = useState([
-    { number: '', date_blocked: '', account_type: '' }
+  const [phoneNumberRequests, setPhoneNumberRequests] = useState([
+    { number: '', date_blocked: '', reason_blocked: '' }
   ]);
 
   const handleChange = (e) => {
@@ -49,26 +49,26 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     }
   };
 
-  const handleMomoNumberRequestChange = (index, field, value) => {
-    const updatedRequests = [...momoNumberRequests];
+  const handlePhoneNumberRequestChange = (index, field, value) => {
+    const updatedRequests = [...phoneNumberRequests];
     updatedRequests[index][field] = value;
-    setMomoNumberRequests(updatedRequests);
+    setPhoneNumberRequests(updatedRequests);
     
-    const errorKey = `momoNumberRequests.${index}.${field}`;
+    const errorKey = `phoneNumberRequests.${index}.${field}`;
     if (hasError(errorKey)) {
       clearErrors([errorKey]);
     }
   };
 
-  const addMomoNumberRequest = () => {
-    setMomoNumberRequests([...momoNumberRequests, { number: '', date_blocked: '', account_type: '' }]);
+  const addPhoneNumberRequest = () => {
+    setPhoneNumberRequests([...phoneNumberRequests, { number: '', date_blocked: '', reason_blocked: '' }]);
   };
 
-  const removeMomoNumberRequest = (index) => {
-    if (momoNumberRequests.length > 1) {
-      const updatedRequests = [...momoNumberRequests];
+  const removePhoneNumberRequest = (index) => {
+    if (phoneNumberRequests.length > 1) {
+      const updatedRequests = [...phoneNumberRequests];
       updatedRequests.splice(index, 1);
-      setMomoNumberRequests(updatedRequests);
+      setPhoneNumberRequests(updatedRequests);
     }
   };
 
@@ -90,16 +90,12 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       errors.primary_contact = 'Enter a valid phone number (07XXXXXXXX)';
     }
 
-    // Validate MoMo number requests
-    momoNumberRequests.forEach((request, index) => {
+    // Validate phone number requests
+    phoneNumberRequests.forEach((request, index) => {
       if (!request.number) {
-        errors[`momoNumberRequests.${index}.number`] = 'Phone number is required';
+        errors[`phoneNumberRequests.${index}.number`] = 'Phone number is required';
       } else if (!phoneRegex.test(request.number)) {
-        errors[`momoNumberRequests.${index}.number`] = 'Enter a valid phone number (07XXXXXXXX)';
-      }
-
-      if (!request.account_type) {
-        errors[`momoNumberRequests.${index}.account_type`] = 'Account type is required';
+        errors[`phoneNumberRequests.${index}.number`] = 'Enter a valid phone number (07XXXXXXXX)';
       }
     });
 
@@ -127,9 +123,9 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     try {
       setIsSubmitting(true);
       
-      const result = await apiService.securityServices.submitUnblockMomoRequest({
+      const result = await apiService.securityServices.submitUnblockCallRequest({
         formData,
-        momoNumberRequests,
+        phoneNumberRequests,
         serviceType,
         userId: user.id
       });
@@ -144,7 +140,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       toast({
         variant: "success",
         title: "Request Submitted",
-        description: "Your unblock MoMo request has been submitted successfully.",
+        description: "Your unblock call request has been submitted successfully.",
       });
       
     } catch (error) {
@@ -169,10 +165,11 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       secondary_contact: '',
       details: '',
     });
-    setMomoNumberRequests([{ number: '', date_blocked: '', account_type: '' }]);
+    setPhoneNumberRequests([{ number: '', date_blocked: '', reason_blocked: '' }]);
     clearErrors();
     setIsSuccess(false);
   };
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <div className="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -196,16 +193,16 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div>
-                    <CardTitle className="text-xl text-gray-900 dark:text-white">Unblock MoMo Account</CardTitle>
+                    <CardTitle className="text-xl text-gray-900 dark:text-white">Unblock Number Request</CardTitle>
                     <CardDescription className="text-gray-500 dark:text-gray-400">
-                      Request to unblock your MoMo account
+                      Request to unblock phone numbers
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               
               <CardContent>
-                <form id="unblock-momo-form" onSubmit={handleSubmit}>
+                <form id="unblock-call-form" onSubmit={handleSubmit}>
                   <div className="space-y-6">
                     {/* Personal Information Section */}
                     <div>
@@ -279,22 +276,22 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                       </div>
                     </div>
 
-                    {/* MoMo Number Requests Section */}
+                    {/* Phone Number Requests Section */}
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">MoMo Accounts to Unblock</h3>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Numbers to Unblock</h3>
                       
-                      {momoNumberRequests.map((request, index) => (
+                      {phoneNumberRequests.map((request, index) => (
                         <div 
                           key={index}
                           className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg relative"
                         >
-                          {momoNumberRequests.length > 1 && (
+                          {phoneNumberRequests.length > 1 && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-500 hover:text-red-500"
-                              onClick={() => removeMomoNumberRequest(index)}
+                              onClick={() => removePhoneNumberRequest(index)}
                             >
                               <XCircle className="h-4 w-4" />
                               <span className="sr-only">Remove</span>
@@ -309,12 +306,12 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                               <Input
                                 placeholder="07XXXXXXXX"
                                 value={request.number}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'number', e.target.value)}
-                                className={hasError(`momoNumberRequests.${index}.number`) ? 'border-red-500 dark:border-red-800' : ''}
+                                onChange={(e) => handlePhoneNumberRequestChange(index, 'number', e.target.value)}
+                                className={hasError(`phoneNumberRequests.${index}.number`) ? 'border-red-500 dark:border-red-800' : ''}
                                 disabled={isSubmitting}
                               />
-                              {hasError(`momoNumberRequests.${index}.number`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.number`)}</p>
+                              {hasError(`phoneNumberRequests.${index}.number`) && (
+                                <p className="text-sm text-red-500">{getErrorMessage(`phoneNumberRequests.${index}.number`)}</p>
                               )}
                             </div>
 
@@ -323,35 +320,26 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                               <Input
                                 type="date"
                                 value={request.date_blocked}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'date_blocked', e.target.value)}
+                                onChange={(e) => handlePhoneNumberRequestChange(index, 'date_blocked', e.target.value)}
                                 disabled={isSubmitting}
                               />
                             </div>
 
                             <div className="space-y-2">
-                              <Label>
-                                Account Type <span className="text-red-500">*</span>
-                              </Label>
+                              <Label>Reason for Blocking</Label>
                               <select
-                                value={request.account_type}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'account_type', e.target.value)}
-                                className={`w-full px-3 py-2 rounded-md border 
-                                          ${hasError(`momoNumberRequests.${index}.account_type`) 
-                                            ? 'border-red-500 dark:border-red-800' 
-                                            : 'border-gray-200 dark:border-gray-700'}
-                                          bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                                          focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white`}
+                                value={request.reason_blocked}
+                                onChange={(e) => handlePhoneNumberRequestChange(index, 'reason_blocked', e.target.value)}
+                                className="w-full px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 
+                                bg-white dark:bg-gray-900 text-gray-900 dark:text-white 
+                                focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
                                 disabled={isSubmitting}
                               >
-                                <option value="">Select Account Type</option>
-                                <option value="company">Company Account</option>
-                                <option value="normal">Normal Account</option>
-                                <option value="momopay">MoMoPay</option>
-                                <option value="agent">MTN Agent</option>
+                                <option value="">Select Reason</option>
+                                <option value="unpaid_bills">Unpaid Bills</option>
+                                <option value="fraud_concern">Fraud Concern</option>
+                                <option value="other">Other</option>
                               </select>
-                              {hasError(`momoNumberRequests.${index}.account_type`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.account_type`)}</p>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -360,12 +348,12 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={addMomoNumberRequest}
+                        onClick={addPhoneNumberRequest}
                         disabled={isSubmitting}
                         className="w-full mt-2"
                       >
                         <Save className="h-4 w-4 mr-2" />
-                        Add Another MoMo Number
+                        Add Another Number
                       </Button>
                     </div>
 
@@ -378,7 +366,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                         id="details"
                         name="details"
                         rows={4}
-                        placeholder="Explain why your MoMo account is blocked"
+                        placeholder="Explain why you need these numbers unblocked"
                         value={formData.details || ''}
                         onChange={handleChange}
                         className={hasError('details') ? 'border-red-500 dark:border-red-800' : ''}
@@ -401,7 +389,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                           <h3 className="text-sm font-medium">Important Note</h3>
                           <div className="mt-2 text-sm">
                             <p>
-                              This service is strictly for unblocking MoMo accounts 
+                              This service is strictly for unblocking phone numbers 
                               registered under the requestor's name. Fraudulent requests 
                               will be reported to the appropriate authorities.
                             </p>
@@ -424,7 +412,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                 </Button>
                 <Button
                   type="submit"
-                  form="unblock-momo-form"
+                  form="unblock-call-form"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
@@ -449,7 +437,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Request Submitted Successfully!</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
-              Your unblock MoMo request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
+              Your unblock number request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
             </p>
             <div className="space-x-4">
               <Button
@@ -473,4 +461,4 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
   );
 };
 
-export default UnblockMomoRequest;
+export default UnblockCallRequest;

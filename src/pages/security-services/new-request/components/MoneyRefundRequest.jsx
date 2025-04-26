@@ -18,7 +18,7 @@ import { useFormContext } from '../context/FormContext';
 import { useAuth } from '../../../../hooks/useAuth';
 import apiService from '../../../../config/api-service';
 
-const UnblockMomoRequest = ({ onBack, serviceType }) => {
+const MoneyRefundRequest = ({ onBack, serviceType }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { 
@@ -36,8 +36,14 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
   
   const [isSuccess, setIsSuccess] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState('');
-  const [momoNumberRequests, setMomoNumberRequests] = useState([
-    { number: '', date_blocked: '', account_type: '' }
+  const [refundRequests, setRefundRequests] = useState([
+    { 
+      phone_number: '', 
+      recipient_number: '', 
+      amount: '', 
+      transaction_date: '', 
+      reason: '' 
+    }
   ]);
 
   const handleChange = (e) => {
@@ -49,26 +55,35 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     }
   };
 
-  const handleMomoNumberRequestChange = (index, field, value) => {
-    const updatedRequests = [...momoNumberRequests];
+  const handleRefundRequestChange = (index, field, value) => {
+    const updatedRequests = [...refundRequests];
     updatedRequests[index][field] = value;
-    setMomoNumberRequests(updatedRequests);
+    setRefundRequests(updatedRequests);
     
-    const errorKey = `momoNumberRequests.${index}.${field}`;
+    const errorKey = `refundRequests.${index}.${field}`;
     if (hasError(errorKey)) {
       clearErrors([errorKey]);
     }
   };
 
-  const addMomoNumberRequest = () => {
-    setMomoNumberRequests([...momoNumberRequests, { number: '', date_blocked: '', account_type: '' }]);
+  const addRefundRequest = () => {
+    setRefundRequests([
+      ...refundRequests, 
+      { 
+        phone_number: '', 
+        recipient_number: '', 
+        amount: '', 
+        transaction_date: '', 
+        reason: '' 
+      }
+    ]);
   };
 
-  const removeMomoNumberRequest = (index) => {
-    if (momoNumberRequests.length > 1) {
-      const updatedRequests = [...momoNumberRequests];
+  const removeRefundRequest = (index) => {
+    if (refundRequests.length > 1) {
+      const updatedRequests = [...refundRequests];
       updatedRequests.splice(index, 1);
-      setMomoNumberRequests(updatedRequests);
+      setRefundRequests(updatedRequests);
     }
   };
 
@@ -90,22 +105,38 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       errors.primary_contact = 'Enter a valid phone number (07XXXXXXXX)';
     }
 
-    // Validate MoMo number requests
-    momoNumberRequests.forEach((request, index) => {
-      if (!request.number) {
-        errors[`momoNumberRequests.${index}.number`] = 'Phone number is required';
-      } else if (!phoneRegex.test(request.number)) {
-        errors[`momoNumberRequests.${index}.number`] = 'Enter a valid phone number (07XXXXXXXX)';
+    // Validate refund requests
+    refundRequests.forEach((request, index) => {
+      if (!request.phone_number) {
+        errors[`refundRequests.${index}.phone_number`] = 'Sender phone number is required';
+      } else if (!/^\d{10,50}$/.test(request.phone_number)) {
+        errors[`refundRequests.${index}.phone_number`] = 'Enter a valid phone or account number';
       }
 
-      if (!request.account_type) {
-        errors[`momoNumberRequests.${index}.account_type`] = 'Account type is required';
+      if (!request.recipient_number) {
+        errors[`refundRequests.${index}.recipient_number`] = 'Recipient phone number is required';
+      } else if (!/^\d{10}$/.test(request.recipient_number)) {
+        errors[`refundRequests.${index}.recipient_number`] = 'Enter a valid 10-digit phone number';
+      }
+
+      if (!request.amount) {
+        errors[`refundRequests.${index}.amount`] = 'Amount is required';
+      } else if (isNaN(parseFloat(request.amount)) || parseFloat(request.amount) <= 0) {
+        errors[`refundRequests.${index}.amount`] = 'Enter a valid amount';
+      }
+
+      if (!request.transaction_date) {
+        errors[`refundRequests.${index}.transaction_date`] = 'Transaction date is required';
+      }
+
+      if (!request.reason) {
+        errors[`refundRequests.${index}.reason`] = 'Reason for refund is required';
       }
     });
 
     // Require additional details
     if (!formData.details) {
-      errors.details = 'Please provide details about your request';
+      errors.details = 'Please provide details about your refund request';
     }
 
     updateFormErrors(errors);
@@ -127,9 +158,9 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
     try {
       setIsSubmitting(true);
       
-      const result = await apiService.securityServices.submitUnblockMomoRequest({
+      const result = await apiService.securityServices.submitMoneyRefundRequest({
         formData,
-        momoNumberRequests,
+        refundRequests,
         serviceType,
         userId: user.id
       });
@@ -144,7 +175,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       toast({
         variant: "success",
         title: "Request Submitted",
-        description: "Your unblock MoMo request has been submitted successfully.",
+        description: "Your money refund request has been submitted successfully.",
       });
       
     } catch (error) {
@@ -169,7 +200,15 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
       secondary_contact: '',
       details: '',
     });
-    setMomoNumberRequests([{ number: '', date_blocked: '', account_type: '' }]);
+    setRefundRequests([
+      { 
+        phone_number: '', 
+        recipient_number: '', 
+        amount: '', 
+        transaction_date: '', 
+        reason: '' 
+      }
+    ]);
     clearErrors();
     setIsSuccess(false);
   };
@@ -196,16 +235,16 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div>
-                    <CardTitle className="text-xl text-gray-900 dark:text-white">Unblock MoMo Account</CardTitle>
+                    <CardTitle className="text-xl text-gray-900 dark:text-white">Money Refund Request</CardTitle>
                     <CardDescription className="text-gray-500 dark:text-gray-400">
-                      Request to unblock your MoMo account
+                      Request refund for failed transactions
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               
               <CardContent>
-                <form id="unblock-momo-form" onSubmit={handleSubmit}>
+                <form id="money-refund-form" onSubmit={handleSubmit}>
                   <div className="space-y-6">
                     {/* Personal Information Section */}
                     <div>
@@ -279,78 +318,120 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                       </div>
                     </div>
 
-                    {/* MoMo Number Requests Section */}
+                    {/* Refund Requests Section */}
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">MoMo Accounts to Unblock</h3>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Refund Requests</h3>
                       
-                      {momoNumberRequests.map((request, index) => (
+                      {refundRequests.map((request, index) => (
                         <div 
                           key={index}
                           className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg relative"
                         >
-                          {momoNumberRequests.length > 1 && (
+                          {refundRequests.length > 1 && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-500 hover:text-red-500"
-                              onClick={() => removeMomoNumberRequest(index)}
+                              onClick={() => removeRefundRequest(index)}
                             >
                               <XCircle className="h-4 w-4" />
                               <span className="sr-only">Remove</span>
                             </Button>
                           )}
                           
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                               <Label>
-                                Phone Number <span className="text-red-500">*</span>
+                                Sender Phone/Account Number <span className="text-red-500">*</span>
                               </Label>
                               <Input
-                                placeholder="07XXXXXXXX"
-                                value={request.number}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'number', e.target.value)}
-                                className={hasError(`momoNumberRequests.${index}.number`) ? 'border-red-500 dark:border-red-800' : ''}
+                                placeholder="Phone or Account Number"
+                                value={request.phone_number}
+                                onChange={(e) => handleRefundRequestChange(index, 'phone_number', e.target.value)}
+                                className={hasError(`refundRequests.${index}.phone_number`) ? 'border-red-500 dark:border-red-800' : ''}
                                 disabled={isSubmitting}
                               />
-                              {hasError(`momoNumberRequests.${index}.number`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.number`)}</p>
+                              {hasError(`refundRequests.${index}.phone_number`) && (
+                                <p className="text-sm text-red-500">{getErrorMessage(`refundRequests.${index}.phone_number`)}</p>
                               )}
                             </div>
 
                             <div className="space-y-2">
-                              <Label>Date Blocked</Label>
+                              <Label>
+                                Recipient Phone Number <span className="text-red-500">*</span>
+                              </Label>
                               <Input
-                                type="date"
-                                value={request.date_blocked}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'date_blocked', e.target.value)}
+                                placeholder="07XXXXXXXX"
+                                value={request.recipient_number}
+                                onChange={(e) => handleRefundRequestChange(index, 'recipient_number', e.target.value)}
+                                className={hasError(`refundRequests.${index}.recipient_number`) ? 'border-red-500 dark:border-red-800' : ''}
                                 disabled={isSubmitting}
                               />
+                              {hasError(`refundRequests.${index}.recipient_number`) && (
+                                <p className="text-sm text-red-500">{getErrorMessage(`refundRequests.${index}.recipient_number`)}</p>
+                              )}
                             </div>
 
                             <div className="space-y-2">
                               <Label>
-                                Account Type <span className="text-red-500">*</span>
+                                Amount <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                type="number"
+                                placeholder="Enter amount"
+                                step="0.01"
+                                value={request.amount}
+                                onChange={(e) => handleRefundRequestChange(index, 'amount', e.target.value)}
+                                className={hasError(`refundRequests.${index}.amount`) ? 'border-red-500 dark:border-red-800' : ''}
+                                disabled={isSubmitting}
+                              />
+                              {hasError(`refundRequests.${index}.amount`) && (
+                                <p className="text-sm text-red-500">{getErrorMessage(`refundRequests.${index}.amount`)}</p>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>
+                                Transaction Date <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                type="date"
+                                value={request.transaction_date}
+                                onChange={(e) => handleRefundRequestChange(index, 'transaction_date', e.target.value)}
+                                className={hasError(`refundRequests.${index}.transaction_date`) ? 'border-red-500 dark:border-red-800' : ''}
+                                disabled={isSubmitting}
+                              />
+                              {hasError(`refundRequests.${index}.transaction_date`) && (
+                                <p className="text-sm text-red-500">{getErrorMessage(`refundRequests.${index}.transaction_date`)}</p>
+                              )}
+                            </div>
+
+                            <div className="col-span-full space-y-2">
+                              <Label>
+                                Reason for Refund <span className="text-red-500">*</span>
                               </Label>
                               <select
-                                value={request.account_type}
-                                onChange={(e) => handleMomoNumberRequestChange(index, 'account_type', e.target.value)}
+                                value={request.reason}
+                                onChange={(e) => handleRefundRequestChange(index, 'reason', e.target.value)}
                                 className={`w-full px-3 py-2 rounded-md border 
-                                          ${hasError(`momoNumberRequests.${index}.account_type`) 
+                                          ${hasError(`refundRequests.${index}.reason`) 
                                             ? 'border-red-500 dark:border-red-800' 
                                             : 'border-gray-200 dark:border-gray-700'}
                                           bg-white dark:bg-gray-900 text-gray-900 dark:text-white
                                           focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white`}
                                 disabled={isSubmitting}
                               >
-                                <option value="">Select Account Type</option>
-                                <option value="company">Company Account</option>
-                                <option value="normal">Normal Account</option>
-                                <option value="momopay">MoMoPay</option>
-                                <option value="agent">MTN Agent</option>
+                                <option value="">Select Reason for Refund</option>
+                                <option value="wrong_recipient">Sent to Wrong Person</option>
+                                <option value="transaction_failed">Transaction Failed but Money Deducted</option>
+                                <option value="duplicate_transaction">Duplicate Transaction</option>
+                                <option value="service_not_received">Service/Product Not Received</option>
+                                <option value="fraud">Fraudulent Transaction</option>
+                                <option value="other">Other (Please Specify in Details)</option>
                               </select>
-                              {hasError(`momoNumberRequests.${index}.account_type`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`momoNumberRequests.${index}.account_type`)}</p>
+                              {hasError(`refundRequests.${index}.reason`) && (
+                                <p className="text-sm text-red-500">{getErrorMessage(`refundRequests.${index}.reason`)}</p>
                               )}
                             </div>
                           </div>
@@ -360,12 +441,12 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={addMomoNumberRequest}
+                        onClick={addRefundRequest}
                         disabled={isSubmitting}
                         className="w-full mt-2"
                       >
                         <Save className="h-4 w-4 mr-2" />
-                        Add Another MoMo Number
+                        Add Another Refund Request
                       </Button>
                     </div>
 
@@ -378,7 +459,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                         id="details"
                         name="details"
                         rows={4}
-                        placeholder="Explain why your MoMo account is blocked"
+                        placeholder="Provide more context about your refund request"
                         value={formData.details || ''}
                         onChange={handleChange}
                         className={hasError('details') ? 'border-red-500 dark:border-red-800' : ''}
@@ -401,9 +482,9 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                           <h3 className="text-sm font-medium">Important Note</h3>
                           <div className="mt-2 text-sm">
                             <p>
-                              This service is strictly for unblocking MoMo accounts 
-                              registered under the requestor's name. Fraudulent requests 
-                              will be reported to the appropriate authorities.
+                              Please ensure you provide accurate transaction details. 
+                              Refund requests are processed based on transaction verification. 
+                              Have transaction proof or screenshots ready if requested.
                             </p>
                           </div>
                         </div>
@@ -424,7 +505,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
                 </Button>
                 <Button
                   type="submit"
-                  form="unblock-momo-form"
+                  form="money-refund-form"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
@@ -449,7 +530,7 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
             </div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Request Submitted Successfully!</h2>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
-              Your unblock MoMo request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
+              Your money refund request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
             </p>
             <div className="space-x-4">
               <Button
@@ -473,4 +554,4 @@ const UnblockMomoRequest = ({ onBack, serviceType }) => {
   );
 };
 
-export default UnblockMomoRequest;
+export default MoneyRefundRequest;

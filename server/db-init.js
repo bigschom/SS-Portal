@@ -20,6 +20,28 @@ export const initializeTables = async () => {
     
     // Check and create guard_shift_reports table if it doesn't exist
     await createGuardShiftReportsTable();
+
+    // Check and create queue_handlers table if it doesn't exist
+    await createQueueHandlersTable();
+        
+    // Check and create service_requests table if it doesn't exist
+    await createServiceRequestsTable();
+
+    // Check and create notification_settings table if it doesn't exist
+    await createNotificationSettingsTable();
+
+    // Check and create request_comments table if it doesn't exist
+    await createRequestCommentsTable();
+
+    // Check and create request_history table if it doesn't exist
+    await createRequestHistoryTable();
+
+    // Check and create service-specific tables
+    await createPhoneNumberRequestsTable();
+    await createStolenPhoneRequestsTable();
+    await createMomoTransactionRequestsTable();
+    await createMoneyRefundRequestsTable();
+    await createMomoUnblockRequestsTable();
     
     console.log('Database initialization completed successfully');
   } catch (error) {
@@ -176,6 +198,208 @@ const createGuardShiftReportsTable = async () => {
       )
     `);
     console.log('Guard_shift_reports table created');
+  }
+};
+
+const createQueueHandlersTable = async () => {
+  const tableExists = await checkTableExists('queue_handlers');
+  
+  if (!tableExists) {
+    console.log('Creating queue_handlers table...');
+    await query(`
+      CREATE TABLE queue_handlers (
+        id SERIAL PRIMARY KEY,
+        service_type VARCHAR(100) NOT NULL,
+        user_id INTEGER NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(service_type, user_id)
+      )
+    `);
+    console.log('queue_handlers table created');
+  }
+};
+
+const createServiceRequestsTable = async () => {
+  const tableExists = await checkTableExists('service_requests');
+  
+  if (!tableExists) {
+    console.log('Creating service_requests table...');
+    await query(`
+      CREATE TABLE service_requests (
+        id SERIAL PRIMARY KEY,
+        reference_number VARCHAR(50) UNIQUE NOT NULL,
+        service_type VARCHAR(100) NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'new',
+        priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+        full_names VARCHAR(100) NOT NULL,
+        id_passport VARCHAR(50),
+        primary_contact VARCHAR(20),
+        secondary_contact VARCHAR(20),
+        details TEXT,
+        assigned_to INTEGER,
+        created_by INTEGER NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('service_requests table created');
+  }
+};
+
+const createNotificationSettingsTable = async () => {
+  const tableExists = await checkTableExists('notification_settings');
+  
+  if (!tableExists) {
+    console.log('Creating notification_settings table...');
+    await query(`
+      CREATE TABLE notification_settings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        browser_enabled BOOLEAN DEFAULT TRUE,
+        sms_enabled BOOLEAN DEFAULT FALSE,
+        email_enabled BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id)
+      )
+    `);
+    console.log('notification_settings table created');
+  }
+};
+
+const createRequestCommentsTable = async () => {
+  const tableExists = await checkTableExists('request_comments');
+  
+  if (!tableExists) {
+    console.log('Creating request_comments table...');
+    await query(`
+      CREATE TABLE request_comments (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL,
+        created_by INTEGER NOT NULL,
+        comment TEXT NOT NULL,
+        is_send_back_reason BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('request_comments table created');
+  }
+};
+
+const createRequestHistoryTable = async () => {
+  const tableExists = await checkTableExists('request_history');
+  
+  if (!tableExists) {
+    console.log('Creating request_history table...');
+    await query(`
+      CREATE TABLE request_history (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL,
+        performed_by INTEGER,
+        action VARCHAR(50) NOT NULL,
+        details TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('request_history table created');
+  }
+};
+
+const createPhoneNumberRequestsTable = async () => {
+  const tableExists = await checkTableExists('phone_number_requests');
+  
+  if (!tableExists) {
+    console.log('Creating phone_number_requests table...');
+    await query(`
+      CREATE TABLE phone_number_requests (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL,
+        phone_number VARCHAR(20) NOT NULL,
+        phone_brand VARCHAR(50),
+        start_date DATE,
+        end_date DATE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('phone_number_requests table created');
+  }
+};
+
+const createStolenPhoneRequestsTable = async () => {
+  const tableExists = await checkTableExists('stolen_phone_requests');
+  
+  if (!tableExists) {
+    console.log('Creating stolen_phone_requests table...');
+    await query(`
+      CREATE TABLE stolen_phone_requests (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL,
+        imei_number VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('stolen_phone_requests table created');
+  }
+};
+
+const createMomoTransactionRequestsTable = async () => {
+  const tableExists = await checkTableExists('momo_transaction_requests');
+  
+  if (!tableExists) {
+    console.log('Creating momo_transaction_requests table...');
+    await query(`
+      CREATE TABLE momo_transaction_requests (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL,
+        phone_number VARCHAR(20) NOT NULL,
+        start_date DATE,
+        end_date DATE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('momo_transaction_requests table created');
+  }
+};
+
+const createMoneyRefundRequestsTable = async () => {
+  const tableExists = await checkTableExists('money_refund_requests');
+  
+  if (!tableExists) {
+    console.log('Creating money_refund_requests table...');
+    await query(`
+      CREATE TABLE money_refund_requests (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL,
+        phone_number VARCHAR(20) NOT NULL,
+        recipient_number VARCHAR(20),
+        amount DECIMAL(10, 2),
+        transaction_date DATE,
+        reason VARCHAR(100),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('money_refund_requests table created');
+  }
+};
+
+const createMomoUnblockRequestsTable = async () => {
+  const tableExists = await checkTableExists('momo_unblock_requests');
+  
+  if (!tableExists) {
+    console.log('Creating momo_unblock_requests table...');
+    await query(`
+      CREATE TABLE momo_unblock_requests (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER NOT NULL,
+        phone_number VARCHAR(20) NOT NULL,
+        date_blocked DATE,
+        account_type VARCHAR(50),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    console.log('momo_unblock_requests table created');
   }
 };
 

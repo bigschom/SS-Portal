@@ -1584,6 +1584,138 @@ app.post('/api/stakeholder-requests', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete a single stakeholder request
+app.delete('/api/stakeholder-requests/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { deleted_by } = req.query;
+  
+  console.log('Deleting stakeholder request with ID:', id, 'by user:', deleted_by);
+  
+  try {
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Get request details before deleting (for logging)
+    const checkResult = await query(
+      'SELECT reference_number, sender, subject FROM stakeholder_requests WHERE id = $1',
+      [id]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      await query('ROLLBACK');
+      return res.status(404).json({ error: 'Stakeholder request not found' });
+    }
+    
+    const requestDetails = checkResult.rows[0];
+    
+    // Delete the request
+    const result = await query(
+      'DELETE FROM stakeholder_requests WHERE id = $1 RETURNING id',
+      [id]
+    );
+    
+    // Log the activity
+    await query(
+      `INSERT INTO activity_log (user_id, description, type, record_id, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [
+        deleted_by || req.user.id,
+        `Deleted stakeholder request: ${requestDetails.reference_number} from ${requestDetails.sender} about ${requestDetails.subject}`,
+        'delete',
+        id
+      ]
+    );
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    return res.json({ 
+      success: true, 
+      message: 'Stakeholder request deleted successfully',
+      id: id 
+    });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    console.error('Error deleting stakeholder request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Delete multiple stakeholder requests
+app.post('/api/stakeholder-requests/delete-multiple', authenticateToken, async (req, res) => {
+  const { ids, deleted_by } = req.body;
+  
+  console.log('Deleting multiple stakeholder requests:', ids, 'by user:', deleted_by);
+  
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'No valid IDs provided for deletion' });
+  }
+  
+  try {
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Get request details before deleting (for logging)
+    const checkResult = await query(
+      'SELECT id, reference_number, sender, subject FROM stakeholder_requests WHERE id = ANY($1)',
+      [ids]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      await query('ROLLBACK');
+      return res.status(404).json({ error: 'No matching stakeholder requests found' });
+    }
+    
+    // Delete the requests
+    const result = await query(
+      'DELETE FROM stakeholder_requests WHERE id = ANY($1) RETURNING id',
+      [ids]
+    );
+    
+    // Log the activity for each deleted request
+    for (const request of checkResult.rows) {
+      await query(
+        `INSERT INTO activity_log (user_id, description, type, record_id, created_at)
+         VALUES ($1, $2, $3, $4, NOW())`,
+        [
+          deleted_by || req.user.id,
+          `Deleted stakeholder request: ${request.reference_number} from ${request.sender} about ${request.subject}`,
+          'delete',
+          request.id
+        ]
+      );
+    }
+    
+    // Log a batch delete activity
+    await query(
+      `INSERT INTO activity_log (user_id, description, type, record_id, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [
+        deleted_by || req.user.id,
+        `Batch deleted ${result.rows.length} stakeholder requests`,
+        'batch_delete',
+        null
+      ]
+    );
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    return res.json({ 
+      success: true, 
+      message: `${result.rows.length} stakeholder requests deleted successfully`,
+      count: result.rows.length,
+      ids: result.rows.map(row => row.id)
+    });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    console.error('Error deleting multiple stakeholder requests:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
 
 // Add this route to test database connection
 app.get('/api/test-db', async (req, res) => {
@@ -2259,3 +2391,870 @@ app.get('/api/guard-shifts/all', authenticateToken, async (req, res) => {
 
 
 
+// QUEUE MANAGEMENT ROUTES
+// Get all handlers
+app.get('/api/queue/handlers', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching queue handlers');
+    
+    const result = await query(
+      `SELECT qh.id, qh.service_type, qh.user_id, u.username, u.full_name,
+              qh.created_at, qh.updated_at
+       FROM queue_handlers qh
+       JOIN users u ON qh.user_id = u.id
+       ORDER BY qh.service_type, u.full_name`
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching queue handlers:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Assign a handler to a service type
+app.post('/api/queue/handlers', authenticateToken, async (req, res) => {
+  try {
+    const { service_type, user_id } = req.body;
+    
+    console.log('Assigning handler to service type:', { service_type, user_id });
+    
+    if (!service_type || !user_id) {
+      return res.status(400).json({ error: 'Service type and user ID are required' });
+    }
+    
+    // Check if the user exists
+    const userCheck = await query('SELECT id FROM users WHERE id = $1', [user_id]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Insert or update the handler assignment
+    const result = await query(
+      `INSERT INTO queue_handlers (service_type, user_id, created_at, updated_at)
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (service_type, user_id) 
+       DO UPDATE SET updated_at = NOW()
+       RETURNING *`,
+      [service_type, user_id]
+    );
+    
+    // Get the user details to include in the response
+    const userResult = await query(
+      'SELECT id, username, full_name FROM users WHERE id = $1',
+      [user_id]
+    );
+    
+    const handler = {
+      ...result.rows[0],
+      username: userResult.rows[0].username,
+      full_name: userResult.rows[0].full_name
+    };
+    
+    return res.status(201).json(handler);
+  } catch (error) {
+    console.error('Error assigning queue handler:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Remove a handler from a service type
+app.delete('/api/queue/handlers/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('Removing handler with ID:', id);
+    
+    const result = await query(
+      'DELETE FROM queue_handlers WHERE id = $1 RETURNING *',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Handler not found' });
+    }
+    
+    return res.json({ success: true, message: 'Handler removed successfully' });
+  } catch (error) {
+    console.error('Error removing queue handler:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Get all service requests
+app.get('/api/queue/requests', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching service requests');
+    
+    const result = await query(
+      `SELECT sr.id, sr.reference_number, sr.service_type, sr.status, sr.priority,
+              sr.full_names, sr.id_passport, sr.primary_contact, sr.secondary_contact,
+              sr.details, sr.assigned_to, sr.created_by,
+              creator.username as creator_username, creator.full_name as creator_full_name,
+              assignee.username as assignee_username, assignee.full_name as assignee_full_name,
+              sr.created_at, sr.updated_at
+       FROM service_requests sr
+       LEFT JOIN users creator ON sr.created_by = creator.id
+       LEFT JOIN users assignee ON sr.assigned_to = assignee.id
+       ORDER BY sr.created_at DESC`
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching service requests:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Assign a request to a handler
+app.put('/api/queue/requests/:id/assign', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.body;
+    
+    console.log('Assigning request to handler:', { request_id: id, user_id });
+    
+    if (!user_id) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    
+    // Check if the request exists
+    const requestCheck = await query(
+      'SELECT id FROM service_requests WHERE id = $1',
+      [id]
+    );
+    
+    if (requestCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Service request not found' });
+    }
+    
+    // Check if the user exists
+    const userCheck = await query(
+      'SELECT id FROM users WHERE id = $1',
+      [user_id]
+    );
+    
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update the request
+    const result = await query(
+      `UPDATE service_requests 
+       SET assigned_to = $1, status = 'in_progress', updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [user_id, id]
+    );
+    
+    // Get the user details to include in the response
+    const userResult = await query(
+      'SELECT id, username, full_name FROM users WHERE id = $1',
+      [user_id]
+    );
+    
+    const request = {
+      ...result.rows[0],
+      assignee_username: userResult.rows[0].username,
+      assignee_full_name: userResult.rows[0].full_name
+    };
+    
+    return res.json(request);
+  } catch (error) {
+    console.error('Error assigning service request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Mark a request as unable to handle
+app.put('/api/queue/requests/:id/unable-to-handle', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('Marking request as unable to handle:', id);
+    
+    // Check if the request exists
+    const requestCheck = await query(
+      'SELECT id FROM service_requests WHERE id = $1',
+      [id]
+    );
+    
+    if (requestCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Service request not found' });
+    }
+    
+    // Update the request
+    const result = await query(
+      `UPDATE service_requests 
+       SET status = 'unable_to_handle', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+    
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error marking service request as unable to handle:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Mark a request as completed
+app.put('/api/queue/requests/:id/complete', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('Marking request as completed:', id);
+    
+    // Check if the request exists
+    const requestCheck = await query(
+      'SELECT id FROM service_requests WHERE id = $1',
+      [id]
+    );
+    
+    if (requestCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Service request not found' });
+    }
+    
+    // Update the request
+    const result = await query(
+      `UPDATE service_requests 
+       SET status = 'completed', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+    
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error marking service request as completed:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Mark a request as under investigation
+app.put('/api/queue/requests/:id/investigate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('Marking request as under investigation:', id);
+    
+    // Check if the request exists
+    const requestCheck = await query(
+      'SELECT id FROM service_requests WHERE id = $1',
+      [id]
+    );
+    
+    if (requestCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Service request not found' });
+    }
+    
+    // Update the request
+    const result = await query(
+      `UPDATE service_requests 
+       SET status = 'pending_investigation', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+    
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error marking service request as under investigation:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Send back a request
+app.put('/api/queue/requests/:id/send-back', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('Sending back request:', id);
+    
+    // Check if the request exists
+    const requestCheck = await query(
+      'SELECT id FROM service_requests WHERE id = $1',
+      [id]
+    );
+    
+    if (requestCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Service request not found' });
+    }
+    
+    // Update the request
+    const result = await query(
+      `UPDATE service_requests 
+       SET status = 'sent_back', assigned_to = NULL, updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+    
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error sending back service request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Get handlers by service type
+app.get('/api/queue/handlers/by-service/:serviceType', authenticateToken, async (req, res) => {
+  try {
+    const { serviceType } = req.params;
+    
+    console.log('Fetching handlers for service type:', serviceType);
+    
+    const result = await query(
+      `SELECT qh.id, qh.service_type, qh.user_id, u.username, u.full_name
+       FROM queue_handlers qh
+       JOIN users u ON qh.user_id = u.id
+       WHERE qh.service_type = $1
+       ORDER BY u.full_name`,
+      [serviceType]
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching handlers by service type:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+
+// NOTIFICATION SETTINGS ROUTES
+app.get('/api/notifications/settings/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log('Fetching notification settings for user ID:', userId);
+    
+    // Check if settings exist for this user
+    const result = await query(
+      'SELECT browser_enabled, sms_enabled, email_enabled FROM notification_settings WHERE user_id = $1',
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      // Create default settings if none exist
+      const defaultSettings = {
+        browserEnabled: true,
+        smsEnabled: false,
+        emailEnabled: true
+      };
+      
+      await query(
+        `INSERT INTO notification_settings (user_id, browser_enabled, sms_enabled, email_enabled)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, defaultSettings.browserEnabled, defaultSettings.smsEnabled, defaultSettings.emailEnabled]
+      );
+      
+      return res.json(defaultSettings);
+    }
+    
+    // Return existing settings
+    const settings = result.rows[0];
+    return res.json({
+      browserEnabled: settings.browser_enabled,
+      smsEnabled: settings.sms_enabled,
+      emailEnabled: settings.email_enabled
+    });
+  } catch (error) {
+    console.error('Error fetching notification settings:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+app.put('/api/notifications/settings/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { browserEnabled, smsEnabled, emailEnabled } = req.body;
+    
+    console.log('Updating notification settings for user ID:', userId);
+    
+    // Update or insert settings (upsert)
+    await query(
+      `INSERT INTO notification_settings (user_id, browser_enabled, sms_enabled, email_enabled, updated_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (user_id) 
+       DO UPDATE SET 
+         browser_enabled = $2,
+         sms_enabled = $3,
+         email_enabled = $4,
+         updated_at = NOW()`,
+      [userId, browserEnabled, smsEnabled, emailEnabled]
+    );
+    
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating notification settings:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+
+
+// Get available security services
+app.get('/api/security-services', authenticateToken, async (req, res) => {
+  try {
+    const services = [
+      {
+        id: 1,
+        service_type: 'request_serial_number',
+        name: 'Request Serial Number',
+        description: 'Request a new serial number'
+      },
+      {
+        id: 2,
+        service_type: 'stolen_phone_check',
+        name: 'Stolen Phone Check',
+        description: 'Check if a phone is reported stolen'
+      },
+      {
+        id: 3,
+        service_type: 'call_history_request',
+        name: 'Call History Request',
+        description: 'Request call history'
+      },
+      {
+        id: 4,
+        service_type: 'unblock_call_request',
+        name: 'Unblock Call Request',
+        description: 'Request to unblock calls'
+      },
+      {
+        id: 5,
+        service_type: 'unblock_momo_request',
+        name: 'Unblock MoMo Request',
+        description: 'Request to unblock MoMo account'
+      },
+      {
+        id: 6,
+        service_type: 'money_refund_request',
+        name: 'Money Refund Request',
+        description: 'Request a money refund'
+      },
+      {
+        id: 7,
+        service_type: 'momo_transaction_request',
+        name: 'MoMo Transaction Request',
+        description: 'Request MoMo transaction details'
+      },
+      {
+        id: 8,
+        service_type: 'backoffice_appointment',
+        name: 'Backoffice Appointment',
+        description: 'Schedule a backoffice appointment'
+      }
+    ];
+    
+    res.json({ services });
+  } catch (error) {
+    console.error('Error fetching security services:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get user service permissions
+app.get('/api/security-services/permissions/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // In a real-world scenario, you'd fetch these from a database based on user role/permissions
+    const allPermissions = [
+      'request_serial_number',
+      'stolen_phone_check',
+      'call_history_request',
+      'unblock_call_request',
+      'unblock_momo_request',
+      'money_refund_request',
+      'momo_transaction_request',
+      'backoffice_appointment'
+    ];
+    
+    // For this example, we'll return all permissions
+    // In a real app, you'd filter based on user role or specific user permissions
+    res.json({ permissions: allPermissions });
+  } catch (error) {
+    console.error('Error fetching user permissions:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+
+// TASKS ROUTES
+// Get available requests for a user
+app.get('/api/tasks/available/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log('Fetching available requests for user ID:', userId);
+    
+    // Get requests that are new and not assigned to anyone
+    const result = await query(
+      `SELECT sr.*, 
+        json_agg(DISTINCT rc) AS request_comments,
+        json_agg(DISTINCT rh) AS request_history,
+        json_build_object('id', created_by.id, 'fullname', created_by.full_name) AS created_by,
+        CASE WHEN sr.assigned_to IS NOT NULL THEN 
+          json_build_object('id', assigned_to.id, 'fullname', assigned_to.full_name)
+        ELSE NULL END AS assigned_to
+      FROM service_requests sr
+      LEFT JOIN users created_by ON sr.created_by = created_by.id
+      LEFT JOIN users assigned_to ON sr.assigned_to = assigned_to.id
+      LEFT JOIN request_comments rc ON sr.id = rc.request_id
+      LEFT JOIN request_history rh ON sr.id = rh.request_id
+      WHERE sr.status = 'new' AND sr.assigned_to IS NULL
+      GROUP BY sr.id, created_by.id, created_by.full_name, assigned_to.id, assigned_to.full_name
+      ORDER BY sr.created_at DESC`,
+      []
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching available requests:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Get assigned requests for a user
+app.get('/api/tasks/assigned/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { status } = req.query;
+    
+    console.log('Fetching assigned requests for user ID:', userId, 'Status filter:', status);
+    
+    let query_text = `
+      SELECT sr.*, 
+        json_agg(DISTINCT rc) AS request_comments,
+        json_agg(DISTINCT rh) AS request_history,
+        json_build_object('id', created_by.id, 'fullname', created_by.full_name) AS created_by,
+        json_build_object('id', assigned_to.id, 'fullname', assigned_to.full_name) AS assigned_to
+      FROM service_requests sr
+      LEFT JOIN users created_by ON sr.created_by = created_by.id
+      LEFT JOIN users assigned_to ON sr.assigned_to = assigned_to.id
+      LEFT JOIN request_comments rc ON sr.id = rc.request_id
+      LEFT JOIN request_history rh ON sr.id = rh.request_id
+      WHERE sr.assigned_to = $1
+    `;
+    
+    const queryParams = [userId];
+    
+    // Add status filter if provided
+    if (status) {
+      query_text += ` AND sr.status = $2`;
+      queryParams.push(status);
+    }
+    
+    query_text += `
+      GROUP BY sr.id, created_by.id, created_by.full_name, assigned_to.id, assigned_to.full_name
+      ORDER BY sr.updated_at DESC
+    `;
+    
+    const result = await query(query_text, queryParams);
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching assigned requests:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Get submitted requests for a user
+app.get('/api/tasks/submitted/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log('Fetching submitted requests for user ID:', userId);
+    
+    const result = await query(
+      `SELECT sr.*, 
+        json_agg(DISTINCT rc) AS request_comments,
+        json_agg(DISTINCT rh) AS request_history,
+        json_build_object('id', created_by.id, 'fullname', created_by.full_name) AS created_by,
+        CASE WHEN sr.assigned_to IS NOT NULL THEN 
+          json_build_object('id', assigned_to.id, 'fullname', assigned_to.full_name)
+        ELSE NULL END AS assigned_to
+      FROM service_requests sr
+      LEFT JOIN users created_by ON sr.created_by = created_by.id
+      LEFT JOIN users assigned_to ON sr.assigned_to = assigned_to.id
+      LEFT JOIN request_comments rc ON sr.id = rc.request_id
+      LEFT JOIN request_history rh ON sr.id = rh.request_id
+      WHERE sr.created_by = $1 AND sr.status != 'sent_back'
+      GROUP BY sr.id, created_by.id, created_by.full_name, assigned_to.id, assigned_to.full_name
+      ORDER BY sr.created_at DESC`,
+      [userId]
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching submitted requests:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Get sent back requests for a user
+app.get('/api/tasks/sent-back/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log('Fetching sent back requests for user ID:', userId);
+    
+    const result = await query(
+      `SELECT sr.*, 
+        json_agg(DISTINCT rc) AS request_comments,
+        json_agg(DISTINCT rh) AS request_history,
+        json_build_object('id', created_by.id, 'fullname', created_by.full_name) AS created_by,
+        CASE WHEN sr.assigned_to IS NOT NULL THEN 
+          json_build_object('id', assigned_to.id, 'fullname', assigned_to.full_name)
+        ELSE NULL END AS assigned_to
+      FROM service_requests sr
+      LEFT JOIN users created_by ON sr.created_by = created_by.id
+      LEFT JOIN users assigned_to ON sr.assigned_to = assigned_to.id
+      LEFT JOIN request_comments rc ON sr.id = rc.request_id
+      LEFT JOIN request_history rh ON sr.id = rh.request_id
+      WHERE sr.created_by = $1 AND sr.status = 'sent_back'
+      GROUP BY sr.id, created_by.id, created_by.full_name, assigned_to.id, assigned_to.full_name
+      ORDER BY sr.updated_at DESC`,
+      [userId]
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching sent back requests:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Get new requests since a timestamp
+app.get('/api/tasks/new-since/:timestamp', authenticateToken, async (req, res) => {
+  try {
+    const { timestamp } = req.params;
+    const { userId } = req.query;
+    
+    console.log('Fetching new requests since:', timestamp, 'for user ID:', userId);
+    
+    const result = await query(
+      `SELECT sr.* 
+      FROM service_requests sr
+      WHERE sr.created_at > to_timestamp($1) 
+      AND sr.status = 'new' 
+      AND sr.assigned_to IS NULL
+      ORDER BY sr.created_at DESC`,
+      [timestamp / 1000] // Convert milliseconds to seconds for PostgreSQL timestamp
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching new requests:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Get status changes since a timestamp
+app.get('/api/tasks/status-changes/:timestamp', authenticateToken, async (req, res) => {
+  try {
+    const { timestamp } = req.params;
+    const { userId } = req.query;
+    
+    console.log('Fetching status changes since:', timestamp, 'for user ID:', userId);
+    
+    const result = await query(
+      `SELECT sr.id, sr.reference_number, sr.status, rh.created_at
+      FROM request_history rh
+      JOIN service_requests sr ON rh.request_id = sr.id
+      WHERE rh.created_at > to_timestamp($1)
+      AND rh.action = 'status_change'
+      AND (sr.created_by = $2 OR sr.assigned_to = $2)
+      ORDER BY rh.created_at DESC`,
+      [timestamp / 1000, userId] // Convert milliseconds to seconds for PostgreSQL timestamp
+    );
+    
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching status changes:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Claim a request
+app.post('/api/tasks/claim/:requestId', authenticateToken, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { userId } = req.body;
+    
+    console.log('Claiming request ID:', requestId, 'for user ID:', userId);
+    
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Update the request
+    await query(
+      `UPDATE service_requests 
+      SET assigned_to = $1, 
+          status = 'in_progress', 
+          updated_at = NOW() 
+      WHERE id = $2`,
+      [userId, requestId]
+    );
+    
+    // Add to history
+    await query(
+      `INSERT INTO request_history (request_id, performed_by, action, details, created_at)
+      VALUES ($1, $2, 'status_change', 'Request claimed and status changed to in progress', NOW())`,
+      [requestId, userId]
+    );
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    return res.json({ success: true });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    console.error('Error claiming request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Update request status
+app.put('/api/tasks/status/:requestId', authenticateToken, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { status, userId, details, assigned_to } = req.body;
+    
+    console.log('Updating request ID:', requestId, 'to status:', status);
+    
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Update the request
+    const updateQuery = `
+      UPDATE service_requests 
+      SET status = $1, 
+          updated_at = NOW()
+          ${assigned_to !== undefined ? ', assigned_to = $3' : ''}
+      WHERE id = $2
+    `;
+    
+    const updateParams = assigned_to !== undefined 
+      ? [status, requestId, assigned_to] 
+      : [status, requestId];
+    
+    await query(updateQuery, updateParams);
+    
+    // Add to history
+    await query(
+      `INSERT INTO request_history (request_id, performed_by, action, details, created_at)
+      VALUES ($1, $2, 'status_change', $3, NOW())`,
+      [requestId, userId, details || `Status changed to ${status}`]
+    );
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    return res.json({ success: true });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    console.error('Error updating request status:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Add a comment to a request
+app.post('/api/tasks/comment/:requestId', authenticateToken, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { userId, comment, isSendBackReason } = req.body;
+    
+    console.log('Adding comment to request ID:', requestId);
+    
+    // Insert the comment
+    await query(
+      `INSERT INTO request_comments (request_id, created_by, comment, is_send_back_reason, created_at)
+      VALUES ($1, $2, $3, $4, NOW())`,
+      [requestId, userId, comment, isSendBackReason]
+    );
+    
+    // Add to history
+    await query(
+      `INSERT INTO request_history (request_id, performed_by, action, details, created_at)
+      VALUES ($1, $2, 'comment_added', $3, NOW())`,
+      [requestId, userId, isSendBackReason ? 'Send back reason added' : 'Comment added']
+    );
+    
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Update request data
+app.put('/api/tasks/data/:requestId', authenticateToken, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const updateData = req.body;
+    
+    console.log('Updating data for request ID:', requestId);
+    
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Build the update query dynamically based on the provided fields
+    const allowedFields = [
+      'full_names', 'primary_contact', 'secondary_contact', 
+      'details', 'status', 'assigned_to', 'priority'
+    ];
+    
+    const updateFields = [];
+    const queryParams = [];
+    let paramIndex = 1;
+    
+    // Add updated_at field
+    updateFields.push(`updated_at = NOW()`);
+    
+    // Add other fields from the request body
+    for (const [key, value] of Object.entries(updateData)) {
+      if (allowedFields.includes(key)) {
+        updateFields.push(`${key} = $${paramIndex}`);
+        queryParams.push(value);
+        paramIndex++;
+      }
+    }
+    
+    // Add request ID as the last parameter
+    queryParams.push(requestId);
+    
+    // Execute the update if there are fields to update
+    if (updateFields.length > 0) {
+      const updateQuery = `
+        UPDATE service_requests 
+        SET ${updateFields.join(', ')} 
+        WHERE id = $${paramIndex}
+      `;
+      
+      await query(updateQuery, queryParams);
+      
+      // Add to history
+      await query(
+        `INSERT INTO request_history (request_id, performed_by, action, details, created_at)
+        VALUES ($1, $2, 'edited', 'Request data updated', NOW())`,
+        [requestId, updateData.updated_by || null]
+      );
+    }
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    return res.json({ success: true });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    console.error('Error updating request data:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});

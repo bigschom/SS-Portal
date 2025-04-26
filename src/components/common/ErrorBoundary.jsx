@@ -42,20 +42,20 @@ class ErrorBoundary extends Component {
     if (this.state.hasError) {
       // You can render any custom fallback UI
       return (
-        <div className="rounded-md border border-red-200 bg-red-50 p-6 dark:border-red-900 dark:bg-red-950/50">
+        <div className="rounded-md border border-[#0A2647] bg-[#0A2647]/10 p-6 dark:border-[#0A2647]/50 dark:bg-[#0A2647]/20">
           <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 mr-3" />
+            <AlertCircle className="h-5 w-5 text-[#0A2647] dark:text-[#0A2647]/80 mt-0.5 mr-3" />
             <div>
-              <h3 className="text-lg font-medium text-red-800 dark:text-red-300">
+              <h3 className="text-lg font-medium text-[#0A2647] dark:text-[#0A2647]/90">
                 Something went wrong
               </h3>
               
-              <div className="mt-2 text-sm text-red-700 dark:text-red-400">
+              <div className="mt-2 text-sm text-[#0A2647]/80 dark:text-[#0A2647]/70">
                 {this.props.fallback || (
                   <p>
                     An error occurred while trying to display this content. 
                     {process.env.NODE_ENV !== 'production' && (
-                      <details className="mt-2 whitespace-pre-wrap text-red-600 dark:text-red-400">
+                      <details className="mt-2 whitespace-pre-wrap text-[#0A2647]/60 dark:text-[#0A2647]/50">
                         <summary className="cursor-pointer">Show error details</summary>
                         <p className="mt-2">
                           {this.state.error && this.state.error.toString()}
@@ -72,7 +72,7 @@ class ErrorBoundary extends Component {
               <div className="mt-4">
                 <Button 
                   onClick={this.handleReset}
-                  className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-800 dark:hover:bg-red-700"
+                  className="bg-[#0A2647] hover:bg-[#0A2647]/90 text-white dark:bg-[#0A2647]/80 dark:hover:bg-[#0A2647]/70"
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Try again
