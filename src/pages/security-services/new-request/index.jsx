@@ -1,15 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../../hooks/useAuth';
 import { useToast } from '../../../components/ui/use-toast';
 import { Alert, AlertDescription } from '../../../components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
-import ServiceCard from './components/ServiceCard';
 import { FormProvider } from './context/FormContext';
-import apiService from '../../../config/api-service';
 
 // Import all service request components
 import SerialNumberRequest from './components/SerialNumberRequest';
@@ -20,115 +17,176 @@ import UnblockMomoRequest from './components/UnblockMomoRequest';
 import MoneyRefundRequest from './components/MoneyRefundRequest';
 import MomoTransactionRequest from './components/MomoTransactionRequest';
 import BackofficeAppointment from './components/BackofficeAppointment';
+import OtherRequest from './components/OtherRequest';
+
+// Simplified service card component
+const SimpleServiceCard = ({ service, onSelect }) => {
+  return (
+    <div 
+      onClick={() => onSelect(service)}
+      className={`
+        bg-white dark:bg-gray-800 
+        shadow-lg rounded-xl 
+        p-6 cursor-pointer 
+        transform transition-all duration-300
+        h-full flex items-center justify-center
+        border-2 border-transparent
+        hover:border-[#0A2647] hover:shadow-xl
+        ${service.isActive ? "" : "opacity-60"}
+      `}
+    >
+      <h3 className="text-xl font-semibold text-center text-gray-900 dark:text-white">
+        {service.name}
+      </h3>
+    </div>
+  );
+};
+
+// Hardcoded services data with active status
+const SERVICES_DATA = [
+  {
+    id: 1,
+    service_type: 'backoffice_appointment',
+    name: 'Backoffice Appointment',
+    isActive: true
+  },
+  {
+    id: 2,
+    service_type: 'call_history_request',
+    name: 'Call History Request',
+    isActive: true
+  },
+  {
+    id: 3,
+    service_type: 'unblock_momo_request',
+    name: 'MoMo Acc Unblock Request',
+    isActive: true
+  },
+  {
+    id: 4,
+    service_type: 'momo_transaction_request',
+    name: 'MoMo Transaction Request',
+    isActive: true
+  },
+  {
+    id: 5,
+    service_type: 'money_refund_request',
+    name: 'MoMo Reversal Request',
+    isActive: true
+  },
+  {
+    id: 6,
+    service_type: 'request_serial_number',
+    name: 'Request Serial Number',
+    isActive: true
+  },
+  {
+    id: 7,
+    service_type: 'unblock_call_request',
+    name: 'SIM Card Unblock',
+    isActive: true
+  },
+
+  {
+    id: 8,
+    service_type: 'stolen_phone_check',
+    name: 'Stolen Phone Check',
+    isActive: true
+  },
+
+  {
+    id: 9,
+    service_type: 'other_requests',
+    name: 'Other Requests',
+    isActive: true
+  }
+
+
+
+
+
+
+];
+
+// Get service status from localStorage or use defaults
+const getServicesWithStatus = () => {
+  try {
+    const savedStatus = localStorage.getItem('serviceStatus');
+    if (savedStatus) {
+      const statusMap = JSON.parse(savedStatus);
+      
+      // Apply saved status to services
+      return SERVICES_DATA.map(service => ({
+        ...service,
+        isActive: statusMap[service.id] !== undefined ? statusMap[service.id] : service.isActive
+      }));
+    }
+  } catch (error) {
+    console.error('Error loading service status:', error);
+  }
+  
+  return SERVICES_DATA;
+};
 
 const SecurityServices = () => {
+  // UI state
+  const [loading, setLoading] = useState(true);
+  const [selectedService, setSelectedService] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [services, setServices] = useState(getServicesWithStatus());
+  
+  // Hooks
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [pageLoading, setPageLoading] = useState(true);
-  const [servicesLoading, setServicesLoading] = useState(true);
-  const [servicesError, setServicesError] = useState(null);
-  
-  const [selectedService, setSelectedService] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
-  const [services, setServices] = useState([]);
-  const [permittedServices, setPermittedServices] = useState([]);
-  
-  // Use a ref to prevent unnecessary API calls
-  const fetchedRef = useRef(false);
-
-  // Fetch available services and permissions
+  // Simulate loading on component mount
   useEffect(() => {
-    const fetchServices = async () => {
-      // Prevent redundant fetches
-      if (fetchedRef.current) return;
-      
-      try {
-        if (!user) {
-          setPageLoading(false);
-          setServicesLoading(false);
-          return;
-        }
-        
-        setServicesLoading(true);
-        fetchedRef.current = true;
-        
-        console.log('Fetching security services...');
-        
-        // Fetch available services
-        const servicesResult = await apiService.securityServices.getAvailableServices();
-        if (servicesResult.error) {
-          throw new Error(servicesResult.error);
-        }
-        
-        // Fetch user permissions
-        const permissionsResult = await apiService.securityServices.getUserServicePermissions(user.id);
-        if (permissionsResult.error) {
-          throw new Error(permissionsResult.error);
-        }
-        
-        const servicesData = servicesResult.services || [];
-        const permittedTypes = permissionsResult.permissions || [];
-        
-        console.log('Services fetched:', servicesData.length);
-        console.log('User permissions fetched:', permittedTypes.length);
-        
-        // Filter services based on user permissions
-        const userServices = servicesData.filter(service => 
-          permittedTypes.includes(service.service_type) || user.role === 'admin'
-        );
-        
-        setServices(servicesData);
-        setPermittedServices(userServices);
-        
-      } catch (error) {
-        console.error('Error fetching services:', error);
-        setServicesError(error);
-        
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load available services. Please try again.",
-        });
-        
-      } finally {
-        setServicesLoading(false);
-        setPageLoading(false);
-      }
-    };
-
-    fetchServices();
+    // Simulate brief loading for UX consistency
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 500);
     
-    // Cleanup function
-    return () => {
-      fetchedRef.current = false;
-    };
-  }, [user, toast]);
+    return () => clearTimeout(timer);
+  }, []);
 
+  // Handle service selection
   const handleServiceSelect = useCallback((service) => {
+    // Check if service is active
+    if (!service.isActive) {
+      toast({
+        variant: "destructive",
+        title: "Service Unavailable",
+        description: `${service.name} is currently unavailable. Please try again later.`
+      });
+      return;
+    }
+    
     setSelectedService(service);
     setShowForm(true);
-  }, []);
+  }, [toast]);
 
+  // Handle back button press
   const handleBack = useCallback(() => {
-    setShowForm(false);
     setSelectedService(null);
+    setShowForm(false);
   }, []);
-
-  // Function to render the appropriate service component
+  
+  // Render appropriate service component
   const renderServiceComponent = useCallback(() => {
     if (!selectedService) return null;
-
+    
     const props = {
       onBack: handleBack,
       serviceId: selectedService.id,
       serviceType: selectedService.service_type
     };
-
+    
     switch (selectedService.service_type) {
-      case 'request_serial_number':
+      
+      case 'backoffice_appointment':
+        return <BackofficeAppointment {...props} />;
+        case 'request_serial_number':
         return <SerialNumberRequest {...props} />;
       case 'stolen_phone_check':
         return <StolenPhoneCheck {...props} />;
@@ -142,8 +200,9 @@ const SecurityServices = () => {
         return <MoneyRefundRequest {...props} />;
       case 'momo_transaction_request':
         return <MomoTransactionRequest {...props} />;
-      case 'backoffice_appointment':
-        return <BackofficeAppointment {...props} />;
+      case 'other_requests':
+        return <OtherRequest {...props} />;
+
       default:
         return (
           <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
@@ -157,141 +216,55 @@ const SecurityServices = () => {
         );
     }
   }, [selectedService, handleBack]);
-
-  // Filter services based on selected tab
-  const filteredServices = useCallback(() => {
-    if (activeTab === 'all') return permittedServices;
-    
-    if (activeTab === 'phone') {
-      return permittedServices.filter(service => 
-        ['request_serial_number', 'stolen_phone_check', 'call_history_request', 'unblock_call_request'].includes(service.service_type)
-      );
-    }
-    
-    if (activeTab === 'momo') {
-      return permittedServices.filter(service => 
-        ['momo_transaction_request', 'unblock_momo_request', 'money_refund_request'].includes(service.service_type)
-      );
-    }
-    
-    if (activeTab === 'other') {
-      return permittedServices.filter(service => 
-        ['backoffice_appointment'].includes(service.service_type)
-      );
-    }
-    
-    return [];
-  }, [activeTab, permittedServices]);
-
-  // Check if there are services in each category
-  const hasPhoneServices = permittedServices.some(service => 
-    ['request_serial_number', 'stolen_phone_check', 'call_history_request', 'unblock_call_request'].includes(service.service_type)
-  );
   
-  const hasMomoServices = permittedServices.some(service => 
-    ['momo_transaction_request', 'unblock_momo_request', 'money_refund_request'].includes(service.service_type)
-  );
-  
-  const hasOtherServices = permittedServices.some(service => 
-    ['backoffice_appointment'].includes(service.service_type)
-  );
-
-  // Loading state
-  if (pageLoading || servicesLoading) {
+  // Show loading spinner
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900">
         <Loader2 className="w-8 h-8 animate-spin text-[#0A2647] dark:text-white" />
       </div>
     );
   }
-
-  // Error state
-  if (servicesError) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900">
-        <Alert variant="destructive" className="max-w-lg">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Failed to load services. Please try again later.</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
+  
+  // Main UI
   return (
     <FormProvider>
       {!showForm ? (
-        <div className="min-h-screen bg-white dark:bg-gray-900">
-          <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
-            >
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Security Services</h1>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Select a service to submit a new request
-                </p>
-              </div>
-
-              <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-4 rounded-lg bg-gray-100 dark:bg-gray-800">
-                  <TabsTrigger 
-                    value="all" 
-                    className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
+        <div className="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 flex items-start justify-center pt-24">
+          <div className="container max-w-6xl mx-auto px-4 -mt-16"> <br></br> <br></br>
+            <AnimatePresence>
+              <motion.div
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                {services.map((service, index) => (
+                  <motion.div
+                    key={service.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ 
+                      opacity: 1, 
+                      y: 0,
+                      transition: { delay: index * 0.1 }
+                    }}
+                    whileHover={{ 
+                      scale: 1.05,
+                      transition: { duration: 0.2 }
+                    }}
+                    className="h-32 md:h-40" // Increased height for cards
                   >
-                    All Services ({permittedServices.length})
-                  </TabsTrigger>
-                  {hasPhoneServices && (
-                    <TabsTrigger 
-                      value="phone" 
-                      className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
-                    >
-                      SIM Card & Phone
-                    </TabsTrigger>
-                  )}
-                  {hasMomoServices && (
-                    <TabsTrigger 
-                      value="momo" 
-                      className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
-                    >
-                      MoMo Services
-                    </TabsTrigger>
-                  )}
-                  {hasOtherServices && (
-                    <TabsTrigger 
-                      value="other" 
-                      className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
-                    >
-                      Other Services
-                    </TabsTrigger>
-                  )}
-                </TabsList>
-
-                <TabsContent value={activeTab} className="mt-6">
-                  {filteredServices().length === 0 ? (
-                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                      No services available in this category
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredServices().map((service) => (
-                        <ServiceCard
-                          key={service.id}
-                          service={service}
-                          onSelect={() => handleServiceSelect(service)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </motion.div>
+                    <SimpleServiceCard
+                      service={service}
+                      onSelect={handleServiceSelect}
+                    />
+                  </motion.div>
+                ))}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
       ) : (
-        // When showing a service form, just render it directly
         <AnimatePresence mode="wait">
           {renderServiceComponent()}
         </AnimatePresence>

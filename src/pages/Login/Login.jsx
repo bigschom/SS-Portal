@@ -85,9 +85,19 @@ const SuccessModal = ({ isOpen, onClose }) => {
 };
 
 // Password Change Modal Component
-const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
+const PasswordChangeModal = ({ 
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  isTemp, 
+  isExpired,
+  daysToExpiration,
+  currentPassword,
+  requireCurrentPassword
+}) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [oldPassword, setOldPassword] = useState(currentPassword || '');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
@@ -105,6 +115,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
     if (isOpen) {
       setNewPassword('');
       setConfirmPassword('');
+      setOldPassword(currentPassword || '');
       setError('');
       setPasswordStrength(0);
       setValidationResults({
@@ -116,7 +127,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
         match: false
       });
     }
-  }, [isOpen]);
+  }, [isOpen, currentPassword]);
 
   // Validate password on input change
   useEffect(() => {
@@ -174,6 +185,10 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
       validationErrors.push('Passwords do not match');
     }
 
+    if (requireCurrentPassword && !oldPassword) {
+      validationErrors.push('Please enter your current password');
+    }
+
     if (validationErrors.length > 0) {
       setError(validationErrors[0]);
       setIsSubmitting(false);
@@ -181,7 +196,12 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
     }
 
     try {
-      await onSubmit(newPassword);
+      // Pass the old password if required
+      if (requireCurrentPassword) {
+        await onSubmit(newPassword, oldPassword);
+      } else {
+        await onSubmit(newPassword);
+      }
       setIsSubmitting(false);
     } catch (err) {
       setError(err.message || 'Failed to update password');
@@ -189,7 +209,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
     }
   };
 
-  // Function to determine strength color - keeping green for password strength
+  // Function to determine strength color
   const getStrengthColor = () => {
     if (passwordStrength === 0) return 'bg-gray-200 dark:bg-gray-700';
     if (passwordStrength === 1) return 'bg-red-500';
@@ -198,6 +218,24 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
     if (passwordStrength === 4) return 'bg-blue-500';
     return 'bg-green-500';
   };
+
+  // Determine the title based on situation
+  let modalTitle = 'Change Password';
+  if (isTemp) {
+    modalTitle = 'Change Temporary Password';
+  } else if (isExpired) {
+    modalTitle = 'Your Password Has Expired';
+  }
+
+  // Determine subtitle based on situation
+  let modalSubtitle = '';
+  if (isTemp) {
+    modalSubtitle = 'Your temporary password has expired or needs to be changed. Please create a new password.';
+  } else if (isExpired) {
+    modalSubtitle = 'Your password has expired and must be changed to continue.';
+  } else if (daysToExpiration) {
+    modalSubtitle = `Your password will expire in ${daysToExpiration} days. Please change it now.`;
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -209,12 +247,12 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
         className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-md w-full mx-4"
       >
         <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
-          {isTemp ? 'Change Temporary Password' : 'Change Password'}
+          {modalTitle}
         </h2>
         
-        {isTemp && (
+        {modalSubtitle && (
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Your temporary password has expired or needs to be changed. Please create a new password.
+            {modalSubtitle}
           </p>
         )}
 
@@ -226,6 +264,25 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Only show current password field when requiring verification */}
+          {requireCurrentPassword && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Current Password
+              </label>
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 
+                         bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                         focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
+                required
+                autoComplete="current-password"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               New Password
@@ -241,7 +298,7 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
               autoComplete="new-password"
             />
             
-            {/* Password strength indicator - keeping green colors */}
+            {/* Password strength indicator */}
             <div className="mt-2">
               <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div 
@@ -331,15 +388,18 @@ const PasswordChangeModal = ({ isOpen, onClose, onSubmit, isTemp }) => {
           </div>
 
           <div className="flex justify-end gap-4 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 
-                       dark:hover:text-white transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
+            {/* Only show cancel button if not expired - expired passwords must be changed */}
+            {!isExpired && (
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 
+                         dark:hover:text-white transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
             <button
               type="submit"
               disabled={isSubmitting || passwordStrength < 4}
@@ -365,9 +425,12 @@ const LoginPage = () => {
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [tempUser, setTempUser] = useState(null);
+  const [currentPassword, setCurrentPassword] = useState(''); // Add this for password change
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [passwordExpiring, setPasswordExpiring] = useState(false); // New state for expiring passwords
+  const [daysToExpiration, setDaysToExpiration] = useState(null); // Track days to expiration
   
   const navigate = useNavigate();
   const { login, updatePassword, updateTempPassword, setUser, logout } = useAuth();
@@ -424,6 +487,9 @@ const LoginPage = () => {
       const { 
         error: loginError, 
         passwordChangeRequired, 
+        passwordExpired,
+        passwordWarning,
+        daysRemaining,
         user: loggedInUser,
         accountInactive,
         accountDeactivated,
@@ -449,9 +515,19 @@ const LoginPage = () => {
         return;
       }
       
-      console.log('Login response:', { passwordChangeRequired, loggedInUser });
+      console.log('Login response:', { passwordChangeRequired, loggedInUser, passwordWarning, daysRemaining });
       
-      if (passwordChangeRequired === true) {
+      // Check for password warning/expiration
+      if (passwordWarning) {
+        showToast('warning', passwordWarning);
+        
+        // If days remaining available, store it
+        if (daysRemaining) {
+          setDaysToExpiration(daysRemaining);
+        }
+      }
+      
+      if (passwordChangeRequired === true || passwordExpired === true) {
         console.log('Password change required, showing modal');
         // Store temporary user for password change
         setTempUser(loggedInUser);
@@ -496,8 +572,9 @@ const LoginPage = () => {
   
       console.log('Updating password for user:', userId, 'with token:', token ? 'present' : 'missing');
       
-      // Pass both userId and token to updatePassword
-      const { user: updatedUser, error } = await updatePassword(userId, newPassword, token);
+      // Pass both userId and newPassword to updatePassword
+      // Also pass the current password for verification
+      const { user: updatedUser, error } = await updatePassword(userId, newPassword, currentPassword);
       
       if (error) {
         showToast('error', `Failed to update password: ${error}`);
@@ -516,6 +593,7 @@ const LoginPage = () => {
       
       // Clear temporary user data
       setTempUser(null);
+      setCurrentPassword('');
       sessionStorage.removeItem('tempUser');
       sessionStorage.removeItem('passwordChangeRequired');
       
@@ -540,7 +618,6 @@ const LoginPage = () => {
     }
   };
   
-  
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
     // Force logout to ensure clean state
@@ -557,7 +634,7 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      {/* Toast notification - now at the bottom */}
+      {/* Toast notification */}
       <AnimatePresence>
         {toast && (
           <Toast 
@@ -651,7 +728,7 @@ const LoginPage = () => {
         </form>
       </motion.div>
 
-      {/* Password Change Modal */}
+      {/* Enhanced Password Change Modal - Pass additional props */}
       <AnimatePresence>
         {showPasswordChange && (
           <PasswordChangeModal 
@@ -659,12 +736,17 @@ const LoginPage = () => {
             onClose={() => {
               setShowPasswordChange(false);
               setTempUser(null);
+              setCurrentPassword('');
               sessionStorage.removeItem('tempUser');
               sessionStorage.removeItem('passwordChangeRequired');
               showToast('info', 'Password change cancelled');
             }}
             onSubmit={handlePasswordChange}
-            isTemp={true}
+            isTemp={!passwordExpiring}
+            isExpired={passwordExpiring}
+            daysToExpiration={daysToExpiration}
+            currentPassword={currentPassword}
+            requireCurrentPassword={passwordExpiring}
           />
         )}
       </AnimatePresence>

@@ -1,44 +1,7 @@
 // src/pages/security-services/task/context/TaskContext.jsx
-import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
-import { useAuth } from '../../../../hooks/useAuth';
-import apiService from '../../../../config/api-service';
+import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import apiClient from '../../../../config/api-service';
 import { REQUEST_STATUS } from '../utils/taskConstants';
-
-// Create a mock implementation of the tasks API for fallback
-const mockTasks = {
-  getAvailableRequests: async (userId) => {
-    console.log('Using mock getAvailableRequests for user:', userId);
-    return [];
-  },
-  getAssignedRequests: async (userId, status = null) => {
-    console.log('Using mock getAssignedRequests for user:', userId, 'status:', status);
-    return [];
-  },
-  getSubmittedRequests: async (userId) => {
-    console.log('Using mock getSubmittedRequests for user:', userId);
-    return [];
-  },
-  getSentBackRequests: async (userId) => {
-    console.log('Using mock getSentBackRequests for user:', userId);
-    return [];
-  },
-  claimRequest: async (requestId, userId) => {
-    console.log('Using mock claimRequest:', requestId, 'for user:', userId);
-    return { success: true };
-  },
-  updateRequestStatus: async (requestId, status, userId, additionalData = {}) => {
-    console.log('Using mock updateRequestStatus:', requestId, status, userId, additionalData);
-    return { success: true };
-  },
-  addComment: async (requestId, userId, comment, isSendBackReason = false) => {
-    console.log('Using mock addComment:', requestId, userId, comment, isSendBackReason);
-    return { success: true };
-  },
-  updateRequestData: async (requestId, data) => {
-    console.log('Using mock updateRequestData:', requestId, data);
-    return { success: true };
-  }
-};
 
 const TaskContext = createContext(null);
 
@@ -47,13 +10,18 @@ const initialState = {
     available: [],
     assigned: [],
     submitted: [],
-    sentBack: [],
-    completed: []
+    sentBack: []
   },
   loading: true,
-  polling: false,
   error: null,
-  success: null
+  success: null,
+  actionLoading: {}
+};
+
+// Helper function to ensure arrays
+const ensureArray = (data) => {
+  if (Array.isArray(data)) return data;
+  return [];
 };
 
 const taskReducer = (state, action) => {
@@ -61,17 +29,25 @@ const taskReducer = (state, action) => {
     case 'SET_REQUESTS':
       return {
         ...state,
-        requests: action.payload
+        requests: {
+          available: ensureArray(action.payload.available),
+          assigned: ensureArray(action.payload.assigned),
+          submitted: ensureArray(action.payload.submitted),
+          sentBack: ensureArray(action.payload.sentBack)
+        }
       };
     case 'SET_LOADING':
       return {
         ...state,
         loading: action.payload
       };
-    case 'SET_POLLING':
+    case 'SET_ACTION_LOADING':
       return {
         ...state,
-        polling: action.payload
+        actionLoading: {
+          ...state.actionLoading,
+          [action.payload.id]: action.payload.status
+        }
       };
     case 'SET_ERROR':
       return {
@@ -98,67 +74,27 @@ const taskReducer = (state, action) => {
 
 export const TaskProvider = ({ children }) => {
   const [state, dispatch] = useReducer(taskReducer, initialState);
-  const { user } = useAuth();
-  const lastFetchTimeRef = useRef(Date.now());
-  const fetchThrottleMs = 5000; // Minimum time between fetches (5 seconds)
 
-  // Explicitly check if the API methods exist and use mocks if they don't
-  const getTaskService = () => {
-    // Check if apiService.tasks exists and has the required methods
-    if (apiService && apiService.tasks && typeof apiService.tasks.getAvailableRequests === 'function') {
-      console.log('Using real API service tasks methods');
-      return apiService.tasks;
-    }
-    
-    // If apiService.tasks doesn't exist or doesn't have the required methods, use mockTasks
-    console.log('Using mock tasks service methods');
-    return mockTasks;
-  };
+  const fetchRequests = useCallback(async (userId) => {
+    if (!userId) return;
 
-  const fetchRequests = useCallback(async (force = false) => {
-    if (!user) return;
-
-    // Throttle fetches unless forced
-    const now = Date.now();
-    if (!force && now - lastFetchTimeRef.current < fetchThrottleMs) {
-      console.log('Throttling fetch requests - too soon since last fetch');
-      return;
-    }
-    
-    lastFetchTimeRef.current = now;
     dispatch({ type: 'SET_LOADING', payload: true });
-    
     try {
-      // Get the appropriate task service
-      const tasks = getTaskService();
-      
       // Fetch all request types in parallel
-      const [available, assigned, submitted, sentBack, completed] = await Promise.all([
-        // Available requests
-        tasks.getAvailableRequests(user.id),
-        
-        // Assigned requests
-        tasks.getAssignedRequests(user.id),
-        
-        // Submitted requests
-        tasks.getSubmittedRequests(user.id),
-        
-        // Sent back requests
-        tasks.getSentBackRequests(user.id),
-        
-        // Completed requests (subset of assigned)
-        tasks.getAssignedRequests(user.id, REQUEST_STATUS.COMPLETED)
+      const [available, assigned, submitted, sentBack] = await Promise.all([
+        apiClient.tasks.getAvailableRequests(userId),
+        apiClient.tasks.getAssignedRequests(userId),
+        apiClient.tasks.getSubmittedRequests(userId),
+        apiClient.tasks.getSentBackRequests(userId)
       ]);
-
+      
       dispatch({
         type: 'SET_REQUESTS',
         payload: {
-          available: available || [],
-          assigned: assigned?.filter(req => 
-            req.status !== REQUEST_STATUS.COMPLETED) || [],
-          submitted: submitted || [],
-          sentBack: sentBack || [],
-          completed: completed || []
+          available, 
+          assigned, 
+          submitted, 
+          sentBack
         }
       });
     } catch (error) {
@@ -167,67 +103,232 @@ export const TaskProvider = ({ children }) => {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [user]);
+  }, []);
 
-  const claimRequest = useCallback(async (requestId) => {
-    if (!user || !requestId) return false;
-    
+  const assignRequest = useCallback(async (request, userId) => {
+    dispatch({ 
+      type: 'SET_ACTION_LOADING', 
+      payload: { id: request.id, status: true } 
+    });
     try {
-      const tasks = getTaskService();
-      await tasks.claimRequest(requestId, user.id);
-      await fetchRequests(true);
-      return true;
+      const result = await apiClient.tasks.claimRequest(request.id, userId);
+      
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
+      
+      await fetchRequests(userId);
+      dispatch({ type: 'SET_SUCCESS', payload: 'Request assigned successfully' });
+      
+      return result;
     } catch (error) {
-      console.error('Error claiming request:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to claim request. Please try again.' });
-      return false;
+      console.error('Error in assignRequest:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to assign request. Please try again.' });
+      throw error;
+    } finally {
+      dispatch({ 
+        type: 'SET_ACTION_LOADING', 
+        payload: { id: request.id, status: false } 
+      });
     }
-  }, [user, fetchRequests]);
+  }, [fetchRequests]);
 
-  const updateRequestStatus = useCallback(async (requestId, status, additionalData = {}) => {
-    if (!user || !requestId) return false;
-    
+  const updateStatus = useCallback(async (requestId, status, userId) => {
+    dispatch({ 
+      type: 'SET_ACTION_LOADING', 
+      payload: { id: requestId, status: true } 
+    });
     try {
-      const tasks = getTaskService();
-      await tasks.updateRequestStatus(requestId, status, user.id, additionalData);
-      await fetchRequests(true);
-      return true;
+      const result = await apiClient.tasks.updateRequestStatus(requestId, status, userId);
+      
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
+      
+      await fetchRequests(userId);
+      dispatch({ type: 'SET_SUCCESS', payload: `Request ${status.replace('_', ' ')}` });
+      
+      return result;
     } catch (error) {
-      console.error('Error updating request status:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to update request status. Please try again.' });
-      return false;
+      console.error('Error in updateStatus:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to update status. Please try again.' });
+      throw error;
+    } finally {
+      dispatch({ 
+        type: 'SET_ACTION_LOADING', 
+        payload: { id: requestId, status: false } 
+      });
     }
-  }, [user, fetchRequests]);
+  }, [fetchRequests]);
 
-  const addComment = useCallback(async (requestId, comment, isSendBackReason = false) => {
-    if (!user || !requestId || !comment) return false;
-    
+  const submitResponse = useCallback(async (requestId, response, userId) => {
+    dispatch({ 
+      type: 'SET_ACTION_LOADING', 
+      payload: { id: requestId, status: true } 
+    });
     try {
-      const tasks = getTaskService();
-      await tasks.addComment(requestId, user.id, comment, isSendBackReason);
-      await fetchRequests(true);
-      return true;
+      // First add the comment
+      const commentResult = await apiClient.tasks.addComment(requestId, userId, response);
+      
+      if (commentResult && commentResult.error) {
+        throw new Error(commentResult.error);
+      }
+      
+      // Then update the status to completed
+      const result = await apiClient.tasks.updateRequestStatus(requestId, 'completed', userId);
+      
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
+      
+      await fetchRequests(userId);
+      dispatch({ type: 'SET_SUCCESS', payload: 'Request completed successfully' });
+      
+      return result;
     } catch (error) {
-      console.error('Error adding comment:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to add comment. Please try again.' });
-      return false;
+      console.error('Error in submitResponse:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to submit response. Please try again.' });
+      throw error;
+    } finally {
+      dispatch({ 
+        type: 'SET_ACTION_LOADING', 
+        payload: { id: requestId, status: false } 
+      });
     }
-  }, [user, fetchRequests]);
+  }, [fetchRequests]);
 
-  const updateRequest = useCallback(async (requestId, data) => {
-    if (!user || !requestId) return false;
-    
+  const sendBackToRequestor = useCallback(async (requestId, comment, userId) => {
+    dispatch({ 
+      type: 'SET_ACTION_LOADING', 
+      payload: { id: requestId, status: true } 
+    });
     try {
-      const tasks = getTaskService();
-      await tasks.updateRequestData(requestId, data);
-      await fetchRequests(true);
-      return true;
+      // Add the comment with send back reason flag
+      const commentResult = await apiClient.tasks.addComment(requestId, userId, comment, true);
+      
+      if (commentResult && commentResult.error) {
+        throw new Error(commentResult.error);
+      }
+      
+      // Update the status to sent_back and clear assigned_to
+      const result = await apiClient.tasks.updateRequestStatus(
+        requestId, 
+        'sent_back', 
+        userId,
+        { assigned_to: null }
+      );
+      
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
+      
+      await fetchRequests(userId);
+      dispatch({ type: 'SET_SUCCESS', payload: 'Request sent back for correction' });
+      
+      return result;
     } catch (error) {
-      console.error('Error updating request:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to update request. Please try again.' });
-      return false;
+      console.error('Error in sendBackToRequestor:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to send request back. Please try again.' });
+      throw error;
+    } finally {
+      dispatch({ 
+        type: 'SET_ACTION_LOADING', 
+        payload: { id: requestId, status: false } 
+      });
     }
-  }, [user, fetchRequests]);
+  }, [fetchRequests]);
+
+  const saveEditedRequest = useCallback(async (requestId, editedData, userId) => {
+    dispatch({ 
+      type: 'SET_ACTION_LOADING', 
+      payload: { id: requestId, status: true } 
+    });
+    try {
+      const result = await apiClient.tasks.updateRequestData(requestId, {
+        ...editedData,
+        updated_by: userId,
+        status: 'new'
+      });
+      
+      if (result && result.error) {
+        throw new Error(result.error);
+      }
+      
+      await fetchRequests(userId);
+      dispatch({ type: 'SET_SUCCESS', payload: 'Request updated successfully' });
+      
+      return result;
+    } catch (error) {
+      console.error('Error in saveEditedRequest:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to save changes. Please try again.' });
+      throw error;
+    } finally {
+      dispatch({ 
+        type: 'SET_ACTION_LOADING', 
+        payload: { id: requestId, status: false } 
+      });
+    }
+  }, [fetchRequests]);
+
+  const autoReturnTask = useCallback(async (request, userId) => {
+    try {
+      if (request && request.status === REQUEST_STATUS.IN_PROGRESS && request.updated_at) {
+        const assignedTime = new Date(request.updated_at).getTime();
+        const currentTime = new Date().getTime();
+        
+        // 30 minutes in milliseconds
+        if (currentTime - assignedTime > 30 * 60 * 1000) {
+          await apiClient.tasks.updateRequestStatus(
+            request.id,
+            'new',
+            userId,
+            {
+              assigned_to: null,
+              details: 'Request automatically returned due to inactivity'
+            }
+          );
+          await fetchRequests(userId);
+        }
+      }
+    } catch (error) {
+      console.error('Error in autoReturnTask:', error);
+    }
+  }, [fetchRequests]);
+
+  const checkTimeouts = useCallback(async (userId) => {
+    const { assigned } = state.requests;
+    if (Array.isArray(assigned)) {
+      for (const request of assigned) {
+        await autoReturnTask(request, userId);
+      }
+    }
+  }, [state.requests, autoReturnTask]);
+
+  // Set up auto-refresh interval to check for timeouts
+  useEffect(() => {
+    let interval;
+    const userStr = sessionStorage.getItem('user');
+    let userId = null;
+    
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        userId = userData.id;
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+      }
+    }
+    
+    if (userId && Array.isArray(state.requests.assigned) && state.requests.assigned.length > 0) {
+      interval = setInterval(() => {
+        checkTimeouts(userId);
+      }, 60000); // Check every minute
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [state.requests.assigned, checkTimeouts]);
 
   const setError = useCallback((message) => {
     dispatch({ type: 'SET_ERROR', payload: message });
@@ -241,67 +342,28 @@ export const TaskProvider = ({ children }) => {
     dispatch({ type: 'CLEAR_MESSAGES' });
   }, []);
 
-  // Setup polling for real-time updates (replacement for Supabase subscription)
+  // Auto-dismiss messages after a delay
   useEffect(() => {
-    let pollingInterval;
-    
-    const startPolling = () => {
-      // Poll every 30 seconds instead of 10 seconds
-      pollingInterval = setInterval(() => {
-        if (!state.loading && user && document.visibilityState === 'visible') {
-          dispatch({ type: 'SET_POLLING', payload: true });
-          fetchRequests().finally(() => {
-            dispatch({ type: 'SET_POLLING', payload: false });
-          });
-        }
-      }, 30000); // 30 seconds
-    };
-    
-    // Handle visibility change
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Fetch immediately when tab becomes visible
-        fetchRequests(true);
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    startPolling();
-    
-    // Fetch initial data
-    if (user) {
-      fetchRequests(true);
+    let timer;
+    if (state.success) {
+      timer = setTimeout(() => clearMessages(), 5000);
+    } else if (state.error) {
+      timer = setTimeout(() => clearMessages(), 10000);
     }
     
     return () => {
-      clearInterval(pollingInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (timer) clearTimeout(timer);
     };
-  }, [fetchRequests, user, state.loading]);
-
-  // Auto-dismiss notifications
-  useEffect(() => {
-    if (state.error) {
-      const timer = setTimeout(() => clearMessages(), 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [state.error, clearMessages]);
-
-  useEffect(() => {
-    if (state.success) {
-      const timer = setTimeout(() => clearMessages(), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [state.success, clearMessages]);
+  }, [state.success, state.error, clearMessages]);
 
   const value = {
     ...state,
-    fetchRequests: (force) => fetchRequests(force),
-    claimRequest,
-    updateRequestStatus,
-    addComment,
-    updateRequest,
+    fetchRequests,
+    assignRequest,
+    updateStatus,
+    submitResponse,
+    sendBackToRequestor,
+    saveEditedRequest,
     setError,
     setSuccess,
     clearMessages

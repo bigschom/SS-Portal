@@ -1,16 +1,340 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Moon, Sun, ChevronDown, User, LogOut, Menu, X, UserCircle } from 'lucide-react';
+import { 
+  Moon, Sun, ChevronDown, User, LogOut, UserCircle, 
+  Lock, CheckCircle, XCircle, AlertCircle, Loader2, Key
+} from 'lucide-react';
 import { roleBasedNavigation } from './navigationConfig';
-import { Dialog, DialogContent } from '../ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { getRoleBasedDashboard } from '../../utils/roleRoutes';
+import authService from '../../services/auth-service'; // Import auth service directly
+
+// Password Change Modal Component
+const PasswordChangeModal = ({ isOpen, onClose, onSubmit }) => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(0);
+  const [validationResults, setValidationResults] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    special: false,
+    match: false
+  });
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setError('');
+      setPasswordStrength(0);
+      setValidationResults({
+        length: false,
+        uppercase: false,
+        lowercase: false,
+        number: false,
+        special: false,
+        match: false
+      });
+    }
+  }, [isOpen]);
+
+  // Validate password on input change
+  useEffect(() => {
+    validatePassword(newPassword, confirmPassword);
+  }, [newPassword, confirmPassword]);
+
+  const validatePassword = (password, confirmPwd) => {
+    const results = {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*]/.test(password),
+      match: password === confirmPwd && password !== ''
+    };
+    
+    setValidationResults(results);
+    
+    // Calculate password strength (0-5)
+    const strength = Object.values(results).filter(Boolean).length - (results.match ? 1 : 0);
+    setPasswordStrength(strength);
+  };
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+
+    // Comprehensive password validation
+    const validationErrors = [];
+
+    if (!currentPassword) {
+      validationErrors.push('Please enter your current password');
+    }
+    
+    if (!validationResults.length) {
+      validationErrors.push('Password must be at least 8 characters long');
+    }
+
+    if (!validationResults.uppercase) {
+      validationErrors.push('Must contain at least one uppercase letter');
+    }
+
+    if (!validationResults.lowercase) {
+      validationErrors.push('Must contain at least one lowercase letter');
+    }
+
+    if (!validationResults.number) {
+      validationErrors.push('Must contain at least one number');
+    }
+
+    if (!validationResults.special) {
+      validationErrors.push('Must contain at least one special character (!@#$%^&*)');
+    }
+
+    if (!validationResults.match) {
+      validationErrors.push('Passwords do not match');
+    }
+
+    if (validationErrors.length > 0) {
+      setError(validationErrors[0]);
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      await onSubmit(currentPassword, newPassword);
+      setIsSubmitting(false);
+    } catch (err) {
+      setError(err.message || 'Failed to update password');
+      setIsSubmitting(false);
+    }
+  };
+
+  // Function to determine strength color
+  const getStrengthColor = () => {
+    if (passwordStrength === 0) return 'bg-gray-200 dark:bg-gray-700';
+    if (passwordStrength === 1) return 'bg-red-500';
+    if (passwordStrength === 2) return 'bg-orange-500';
+    if (passwordStrength === 3) return 'bg-yellow-500';
+    if (passwordStrength === 4) return 'bg-blue-500';
+    return 'bg-green-500';
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md p-6">
+        <DialogTitle className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
+          Change Password
+        </DialogTitle>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 rounded-lg flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Current Password Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Current Password
+            </label>
+            <div className="relative">
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 
+                         bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                         focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
+                required
+                autoComplete="current-password"
+              />
+              <Lock className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
+            </div>
+          </div>
+
+          {/* New Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              New Password
+            </label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 
+                       bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                       focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
+              required
+              autoComplete="new-password"
+            />
+            
+            {/* Password strength indicator */}
+            <div className="mt-2">
+              <div className="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full ${getStrengthColor()} transition-all duration-300`} 
+                  style={{ width: `${(passwordStrength / 5) * 100}%` }}
+                ></div>
+              </div>
+              <p className="text-xs mt-1 text-gray-500 dark:text-gray-400">
+                {passwordStrength === 0 && "Password strength: Enter a password"}
+                {passwordStrength === 1 && "Password strength: Very weak"}
+                {passwordStrength === 2 && "Password strength: Weak"}
+                {passwordStrength === 3 && "Password strength: Moderate"}
+                {passwordStrength === 4 && "Password strength: Strong"}
+                {passwordStrength === 5 && "Password strength: Very strong"}
+              </p>
+            </div>
+          </div>
+          
+          {/* Confirm New Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Confirm New Password
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 
+                       bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                       focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
+              required
+              autoComplete="new-password"
+            />
+          </div>
+
+          {/* Password Requirements */}
+          <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+            <p>Password must contain:</p>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+              <li className="flex items-center gap-1.5">
+                {validationResults.length ? (
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span>At least 8 characters</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                {validationResults.uppercase ? (
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span>One uppercase letter</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                {validationResults.lowercase ? (
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span>One lowercase letter</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                {validationResults.number ? (
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span>One number</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                {validationResults.special ? (
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span>One special character (!@#$%^&*)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                {validationResults.match ? (
+                  <CheckCircle className="w-4 h-4 text-[#0A2647] dark:text-white" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span>Passwords match</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 
+                       dark:hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || passwordStrength < 4}
+              className="px-4 py-2 bg-[#0A2647] hover:bg-[#0A2647]/90 dark:bg-white text-white dark:text-[#0A2647] rounded-lg
+                       dark:hover:bg-gray-100 transition-colors 
+                       flex items-center gap-2 disabled:opacity-50"
+            >
+              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Update Password
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Toast Notification Component
+const Toast = ({ type, message, onClose }) => {
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+      <div className="flex items-center">
+        <div className="mr-3">
+          {type === 'success' ? (
+            <CheckCircle className="w-5 h-5 text-green-500" />
+          ) : type === 'error' ? (
+            <XCircle className="w-5 h-5 text-red-500" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-yellow-500" />
+          )}
+        </div>
+        <div className="text-gray-800 dark:text-gray-200 font-medium mr-6">
+          {message}
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-auto bg-transparent text-gray-500 rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <span className="sr-only">Close</span>
+          <XCircle className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const Header = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [openSubmenu, setOpenSubmenu] = useState(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [toast, setToast] = useState(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -26,6 +350,12 @@ const Header = () => {
 
   // Get navigation items based on the user's role
   const navigationItems = user ? roleBasedNavigation[user.role] || [] : [];
+
+  // Show toast notification
+  const showToast = (type, message, duration = 3000) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), duration);
+  };
 
   // Handle click outside dropdown and submenus
   useEffect(() => {
@@ -46,7 +376,6 @@ const Header = () => {
     try {
       logout();
       setIsDropdownOpen(false);
-      setIsMobileMenuOpen(false);
       navigate('/login', { replace: true });
     } catch (error) {
       console.error('Error signing out:', error);
@@ -56,7 +385,11 @@ const Header = () => {
   const handleProfileClick = () => {
     setIsProfileModalOpen(true);
     setIsDropdownOpen(false);
-    setIsMobileMenuOpen(false);
+  };
+
+  const handlePasswordClick = () => {
+    setIsPasswordModalOpen(true);
+    setIsDropdownOpen(false);
   };
 
   const handleLogoClick = () => {
@@ -64,7 +397,46 @@ const Header = () => {
       const dashboardPath = getRoleBasedDashboard(user.role);
       navigate(dashboardPath);
     }
-    setIsMobileMenuOpen(false);
+  };
+
+  // Handle password change with history check
+  const handlePasswordChange = async (currentPassword, newPassword) => {
+    try {
+      if (!user || !user.id) {
+        throw new Error('User information is missing');
+      }
+      
+      // First, verify if the password is in history using your existing method
+      const historyCheck = await authService.checkPasswordHistory(user.id, newPassword);
+      
+      if (historyCheck.error) {
+        throw new Error(historyCheck.error);
+      }
+      
+      if (historyCheck.isRepeatedPassword) {
+        throw new Error('You cannot reuse a previous password. Please choose a different password.');
+      }
+      
+      // If password is not in history, proceed with update
+      const result = await authService.updatePassword(user.id, newPassword, currentPassword);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      setIsPasswordModalOpen(false);
+      showToast('success', 'Password updated successfully. Please log in again with your new password.');
+      
+      // Logout after a short delay to allow the user to see the success message
+      setTimeout(() => {
+        logout();
+        navigate('/login', { replace: true });
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Password change error:', error);
+      throw new Error(error.message || 'Failed to update password');
+    }
   };
 
   useEffect(() => {
@@ -86,17 +458,6 @@ const Header = () => {
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setIsMobileMenuOpen(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const toggleDarkMode = () => {
@@ -139,11 +500,17 @@ const Header = () => {
     return `${firstName} ${lastName.charAt(0)}.`;
   };
 
+  // Create unique keys for the navigation items
+  const getItemKey = (item, index) => {
+    return item.path ? item.path : `${item.name}-${index}`;
+  };
+
   return (
     <>
-      <header className="bg-gray-50 dark:bg-gray-900 shadow-sm mt-0">
+      <header className="bg-gray-50 dark:bg-gray-900 shadow-sm sticky top-0 z-20">
         <div className="max-w-full px-4 py-2">
           <div className="flex justify-between items-center">
+            {/* Logo */}
             <img 
               src="/logo.png" 
               alt="Logo" 
@@ -151,26 +518,14 @@ const Header = () => {
               onClick={handleLogoClick}
             />
 
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              {isMobileMenuOpen ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
-            </button>
-
             {/* Desktop Navigation */}
-            <div className="hidden md:flex flex-1 justify-center" ref={menuRef}>
+            <div className="flex flex-1 justify-center" ref={menuRef}>
               <nav className="flex items-center space-x-6">
-                {navigationItems.map((item) => {
+                {navigationItems.map((item, index) => {
                   const Icon = item.icon;
                   return item.children ? (
                     <div 
-                      key={item.name}
+                      key={getItemKey(item, index)}
                       className="relative"
                       onMouseEnter={() => setOpenSubmenu(item.name)}
                       onMouseLeave={() => setOpenSubmenu(null)}
@@ -184,11 +539,11 @@ const Header = () => {
                       </button>
                       {openSubmenu === item.name && (
                         <div className="absolute left-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-10">
-                          {item.children.map((child) => {
+                          {item.children.map((child, childIndex) => {
                             const ChildIcon = child.icon;
                             return (
                               <Link
-                                key={child.path}
+                                key={child.path || `${child.name}-${childIndex}`}
                                 to={child.path}
                                 className="flex items-center px-4 py-2 text-sm text-gray-900 dark:text-gray-100 
                                          hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -203,7 +558,7 @@ const Header = () => {
                     </div>
                   ) : (
                     <Link
-                      key={item.path}
+                      key={getItemKey(item, index)}
                       to={item.path}
                       className="flex items-center px-3 py-2 rounded-md text-sm font-medium 
                                text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 
@@ -217,9 +572,9 @@ const Header = () => {
               </nav>
             </div>
 
-            {/* Desktop User Menu */}
+            {/* User Menu */}
             {user && (
-              <div className="hidden md:flex items-center">
+              <div className="flex items-center">
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -256,8 +611,15 @@ const Header = () => {
                           My Profile
                         </button>
                         <button
+                          onClick={handlePasswordClick}
+                          className="flex items-center w-full text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md px-2 py-2 mt-1"
+                        >
+                          <Key className="h-4 w-4 mr-2" />
+                          Change Password
+                        </button>
+                        <button
                           onClick={toggleDarkMode}
-                          className="flex items-center w-full text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md px-2 py-2"
+                          className="flex items-center w-full text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md px-2 py-2 mt-1"
                         >
                           {isDarkMode ? (
                             <Sun className="h-4 w-4 mr-2" />
@@ -283,115 +645,10 @@ const Header = () => {
         </div>
       </header>
 
-      {/* Mobile Navigation Drawer */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50">
-          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setIsMobileMenuOpen(false)} />
-          <div className="fixed inset-y-0 right-0 w-64 bg-white dark:bg-gray-900 shadow-xl">
-            <div className="flex flex-col h-full">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-gray-300 dark:bg-gray-600 rounded-full p-3">
-                    <User className="h-6 w-6 text-gray-600 dark:text-gray-300" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.full_name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {user ? getRoleDisplayName(user.role) : ''}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-                {navigationItems.map((item) => {
-                  const Icon = item.icon;
-                  return item.children ? (
-                    <div key={item.name} className="space-y-2">
-                      <button
-                        onClick={() => setOpenSubmenu(openSubmenu === item.name ? null : item.name)}
-                        className="flex items-center w-full px-3 py-2 rounded-md text-sm font-medium 
-                                 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
-                      >
-                        <Icon className="h-4 w-4 mr-2" />
-                        {item.name}
-                        <ChevronDown className={`h-4 w-4 ml-auto transform transition-transform ${
-                          openSubmenu === item.name ? 'rotate-180' : ''
-                        }`} />
-                      </button>
-                      {openSubmenu === item.name && (
-                        <div className="pl-4 space-y-2">
-                          {item.children.map((child) => {
-                            const ChildIcon = child.icon;
-                            return (
-                              <Link
-                                key={child.path}
-                                to={child.path}
-                                onClick={() => setIsMobileMenuOpen(false)}
-                                className="flex items-center px-3 py-2 rounded-md text-sm text-gray-900 
-                                         dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
-                              >
-                                <ChildIcon className="h-4 w-4 mr-2" />
-                                {child.name}
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex items-center px-3 py-2 rounded-md text-sm font-medium 
-                               text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    >
-                      <Icon className="h-4 w-4 mr-2" />
-                      {item.name}
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={handleProfileClick}
-                  className="flex items-center w-full px-3 py-2 rounded-md text-sm text-gray-900 
-                           dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  My Profile
-                </button>
-                <button
-                  onClick={toggleDarkMode}
-                  className="flex items-center w-full px-3 py-2 mt-2 rounded-md text-sm text-gray-900 
-                           dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  {isDarkMode ? (
-                    <Sun className="h-4 w-4 mr-2" />
-                  ) : (
-                    <Moon className="h-4 w-4 mr-2" />
-                  )}
-                  {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-                </button>
-                <button
-                  onClick={handleSignOut}
-                  className="flex items-center w-full px-3 py-2 mt-2 rounded-md text-sm text-gray-900 
-                           dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Profile Modal */}
       <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
         <DialogContent className="sm:max-w-[400px] p-0 gap-0">
+          <DialogTitle className="sr-only">User Profile</DialogTitle>
           <div className="flex flex-col">
             {/* Profile Header with Avatar */}
             <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-t-lg">
@@ -450,6 +707,22 @@ const Header = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Password Change Modal */}
+      <PasswordChangeModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        onSubmit={handlePasswordChange}
+      />
+
+      {/* Toast Notifications */}
+      {toast && (
+        <Toast 
+          type={toast.type} 
+          message={toast.message} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </>
   );
 };

@@ -415,30 +415,15 @@ const AllBackgroundChecks = () => {
     setRolesLoading(true);
     
     try {
-      // Fetch departments using the existing getDepartments method
-      const depts = await apiService.backgroundChecks.getDepartments();
-      
-      if (!depts || depts.length === 0) {
-        console.warn('No departments found - this might be an error');
-      }
-      
-      setDepartments(depts || []);
-    } catch (error) {
-      console.error('Error fetching departments:', error);
-      showToast('Failed to load departments. Some filters may not work correctly.', 'warning');
-    } finally {
-      setDepartmentsLoading(false);
-    }
-    
-    try {
-      // Fetch roles using the existing getRoleTypes method
       const rolesData = await apiService.backgroundChecks.getRoleTypes();
       
       if (!rolesData || rolesData.length === 0) {
         console.warn('No roles found - this might be an error');
         setRoles([]);
       } else {
-        setRoles(rolesData || []);
+        // Filter out 'Internship' from the roles
+        const filteredRoles = rolesData.filter(role => role !== 'Internship');
+        setRoles(filteredRoles || []);
       }
     } catch (error) {
       console.error('Error fetching roles:', error);

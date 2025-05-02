@@ -1,509 +1,490 @@
 // src/pages/security-services/task/TaskPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs';
-import { Card, CardContent } from '../../../components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import { Input } from '../../../components/ui/input';
-import { Search, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useAuth } from '../../../hooks/useAuth';
+import { Button } from '../../../components/ui/button';
+import { Card, CardContent } from '../../../components/ui/card';
 import { Alert, AlertDescription } from '../../../components/ui/alert';
-import { useNotifications } from '../../../hooks/useNotifications';
-import { useServiceNotifications } from '../../../hooks/useServiceNotifications';
+import { useToast } from '../../../components/ui/use-toast';
+import { 
+  Search, 
+  Loader2, 
+  AlertCircle, 
+  CheckCircle, 
+  RefreshCw
+} from 'lucide-react';
 
-// Import context
-import { TaskProvider, useTask } from './context/TaskContext';
-
-// Import components
+// Import task-specific components
 import RequestCard from './components/RequestCard';
 import RequestDialog from './components/RequestDialog';
-
-// Import constants
-import { REQUEST_STATUS } from './utils/taskConstants';
+import { TaskProvider, useTask } from './context/TaskContext';
 
 const TasksContent = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  
-  // Use the task context
+  const { toast } = useToast();
   const { 
-    requests, 
-    loading, 
-    polling,
-    error, 
-    success, 
+    requests,
+    loading,
+    actionLoading,
+    error,
+    success,
     fetchRequests,
-    claimRequest,
-    updateRequestStatus,
-    addComment,
-    updateRequest,
+    assignRequest,
+    updateStatus,
+    submitResponse,
+    sendBackToRequestor,
+    saveEditedRequest,
     setError,
     setSuccess,
     clearMessages
   } = useTask();
   
-  // Use the notifications hooks
-  const { notificationsEnabled } = useNotifications();
-  useServiceNotifications();
-
-  // States
+  // Local state
   const [activeTab, setActiveTab] = useState('available');
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [actionLoading, setActionLoading] = useState({});
-  // Create a ref to track initialization - properly defined in component body
-  const hasInitializedRef = React.useRef(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  // Use URL parameters to handle request references
+  // Get current user from session storage
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const refNumber = params.get('ref');
-    
-    if (refNumber && requests.available.length > 0) {
-      const foundRequest = [
-        ...requests.available,
-        ...requests.assigned,
-        ...requests.submitted,
-        ...requests.sentBack
-      ].find(req => req.reference_number === refNumber);
-      
-      if (foundRequest) {
-        setSelectedRequest(foundRequest);
-        setIsDialogOpen(true);
+    const userStr = sessionStorage.getItem('user');
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        setCurrentUser({
+          id: userData.id,
+          fullname: userData.full_name || userData.username,
+          username: userData.username,
+          role: userData.role
+        });
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+        // Handle invalid user data
+        toast({
+          variant: "destructive",
+          title: "Authentication Error",
+          description: "Please log in again"
+        });
       }
+    } else {
+      // Handle missing user data
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please log in to access this page"
+      });
     }
-  }, [requests]);
+  }, [toast]);
 
-  // Fetch initial data - FIXED VERSION with proper hook rules
+  // Initialize data when user is loaded
   useEffect(() => {
-    if (user && !hasInitializedRef.current) {
-      // Set a small delay to avoid startup congestion
-      const timer = setTimeout(() => {
-        try {
-          fetchRequests(true); // Force initial fetch
-          hasInitializedRef.current = true;
-        } catch (error) {
-          console.error("Error fetching initial data:", error);
-        }
-      }, 1500);
-      
-      return () => clearTimeout(timer);
+    if (currentUser?.id) {
+      fetchRequests(currentUser.id);
     }
-  }, [user, fetchRequests]);
+  }, [fetchRequests, currentUser?.id]);
 
-  // Auto-check for timed-out requests (those in progress for more than 30 minutes)
-  useEffect(() => {
-    // Track running timeouts to clean them up
-    const timeouts = [];
+  // Manual refresh function
+  const handleRefresh = async () => {
+    if (!currentUser?.id) return;
     
-    const checkTimeouts = async () => {
-      const activeRequests = [...requests.assigned];
-      const currentTime = Date.now();
-      
-      for (const request of activeRequests) {
-        if (request.status === REQUEST_STATUS.IN_PROGRESS) {
-          const assignedTime = new Date(request.updated_at).getTime();
-          
-          // Check if it's been more than 30 minutes
-          if (currentTime - assignedTime > 30 * 60 * 1000) {
-            try {
-              const success = await updateRequestStatus(request.id, REQUEST_STATUS.NEW, {
-                assigned_to: null,
-                details: `Request automatically returned to available queue after 30 minutes of inactivity.`
-              });
-              
-              if (success && notificationsEnabled) {
-                new Notification('Request Auto-Returned', {
-                  body: `Request ${request.reference_number} has been auto-returned to the queue`,
-                  icon: '/favicon.ico',
-                });
-              }
-            } catch (err) {
-              console.error('Error in auto-return:', err);
-            }
-          }
-        }
-      }
-    };
-
-    // Check every 5 minutes instead of every minute to reduce load
-    const interval = setInterval(checkTimeouts, 5 * 60 * 1000);
-    
-    // Clean up interval on unmount
-    return () => {
-      clearInterval(interval);
-      timeouts.forEach(timeout => clearTimeout(timeout));
-    };
-  }, [requests.assigned, updateRequestStatus, notificationsEnabled]);
-
-  // Handle request click
-  const handleRequestClick = async (request) => {
+    setIsRefreshing(true);
     try {
-      setSelectedRequest(request);
-      setIsDialogOpen(true);
-      setActionLoading(prev => ({ ...prev, [request.id]: true }));
-
-      // Automatically claim new requests
-      if (request.status === REQUEST_STATUS.NEW && request.created_by?.id !== user?.id) {
-        await claimRequest(request.id);
-        
-        if (notificationsEnabled) {
-          new Notification('Request Assigned', {
-            body: `You have been assigned request: ${request.reference_number}`,
-            icon: '/favicon.ico',
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Error in handleRequestClick:', err);
-      setError('Failed to handle request. Please try again.');
+      await fetchRequests(currentUser.id);
+      toast({
+        title: "Refreshed",
+        description: "Request list updated successfully",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Refresh Failed",
+        description: "Could not refresh requests. Please try again."
+      });
     } finally {
-      setActionLoading(prev => ({ ...prev, [request.id]: false }));
+      setIsRefreshing(false);
     }
   };
 
-  // Handle status change
-  const handleStatusChange = async (status) => {
-    if (!selectedRequest || !user) return;
-
-    setActionLoading(prev => ({ ...prev, [selectedRequest.id]: true }));
+  // Handle request click
+  const handleRequestClick = async (request) => {
+    if (!currentUser?.id) return;
+    
     try {
-      const success = await updateRequestStatus(selectedRequest.id, status, {
-        details: `Status changed to ${status}`
-      });
-
-      if (success) {
-        if (notificationsEnabled && status === REQUEST_STATUS.COMPLETED) {
-          new Notification('Request Status Updated', {
-            body: `Request ${selectedRequest.reference_number} has been completed`,
-            icon: '/favicon.ico',
-          });
-        }
-
-        setIsDialogOpen(false);
-        setSelectedRequest(null);
-        setSuccess(`Request status updated to ${status.replace(/_/g, ' ')}`);
+      setSelectedRequest(request);
+      setIsDialogOpen(true);
+      
+      // If clicking an available request, assign it automatically
+      if (request.status === 'new' && !request.assigned_to && 
+          request.created_by?.id !== currentUser.id) {
+        await assignRequest(request, currentUser.id);
       }
-    } catch (err) {
-      console.error('Error in handleStatusChange:', err);
-      setError('Failed to update status. Please try again.');
-    } finally {
-      setActionLoading(prev => ({ ...prev, [selectedRequest.id]: false }));
+    } catch (error) {
+      console.error('Error handling request click:', error);
+    }
+  };
+
+  // Handle dialog close
+  const handleDialogClose = () => {
+    setIsDialogOpen(false);
+    setSelectedRequest(null);
+  };
+
+  // Handle status change
+  const handleStatusChange = async (requestId, status) => {
+    if (!currentUser?.id) return;
+    
+    try {
+      await updateStatus(requestId, status, currentUser.id);
+      setIsDialogOpen(false);
+      setSelectedRequest(null);
+    } catch (error) {
+      console.error('Error in handleStatusChange:', error);
     }
   };
 
   // Handle submit response
-  const handleSubmitResponse = async (response) => {
-    if (!selectedRequest || !user || !response.trim()) return;
-
-    setActionLoading(prev => ({ ...prev, [selectedRequest.id]: true }));
+  const handleSubmitResponse = async (requestId, response) => {
+    if (!currentUser?.id) return;
+    
     try {
-      // Add the response comment
-      await addComment(selectedRequest.id, response);
-      
-      // Update status to completed
-      await updateRequestStatus(selectedRequest.id, REQUEST_STATUS.COMPLETED);
-
-      if (notificationsEnabled) {
-        new Notification('Request Completed', {
-          body: `Request ${selectedRequest.reference_number} has been completed with response`,
-          icon: '/favicon.ico',
-        });
-      }
-
+      await submitResponse(requestId, response, currentUser.id);
       setIsDialogOpen(false);
       setSelectedRequest(null);
-      setSuccess('Request completed successfully');
-    } catch (err) {
-      console.error('Error in handleSubmitResponse:', err);
-      setError('Failed to submit response. Please try again.');
-    } finally {
-      setActionLoading(prev => ({ ...prev, [selectedRequest.id]: false }));
+    } catch (error) {
+      console.error('Error in handleSubmitResponse:', error);
     }
   };
 
   // Handle send back to requestor
-  const handleSendBackToRequestor = async (comment) => {
-    if (!selectedRequest || !user) return;
-
-    setActionLoading(prev => ({ ...prev, [selectedRequest.id]: true }));
+  const handleSendBackToRequestor = async (requestId, comment) => {
+    if (!currentUser?.id) return;
+    
     try {
-      // Add send back comment
-      await addComment(selectedRequest.id, `SEND BACK REASON: ${comment}`, true);
-      
-      // Update status to sent back
-      await updateRequestStatus(selectedRequest.id, REQUEST_STATUS.SENT_BACK, {
-        assigned_to: null
-      });
-
-      if (notificationsEnabled) {
-        new Notification('Request Sent Back', {
-          body: `Request ${selectedRequest.reference_number} has been sent back for correction`,
-          icon: '/favicon.ico',
-        });
-      }
-
+      await sendBackToRequestor(requestId, comment, currentUser.id);
       setIsDialogOpen(false);
       setSelectedRequest(null);
-      setSuccess('Request sent back for correction');
-    } catch (err) {
-      console.error('Error in handleSendBackToRequestor:', err);
-      setError('Failed to send request back. Please try again.');
-    } finally {
-      setActionLoading(prev => ({ ...prev, [selectedRequest.id]: false }));
+    } catch (error) {
+      console.error('Error in handleSendBackToRequestor:', error);
     }
   };
 
   // Handle save edit
-  const handleSaveEdit = async (editedData) => {
-    setActionLoading(prev => ({ ...prev, [selectedRequest.id]: true }));
+  const handleSaveEdit = async (requestId, editedData) => {
+    if (!currentUser?.id) return;
+    
     try {
-      await updateRequest(selectedRequest.id, editedData);
+      await saveEditedRequest(requestId, editedData, currentUser.id);
       setIsDialogOpen(false);
       setSelectedRequest(null);
-      setSuccess('Request updated successfully');
-    } catch (err) {
-      console.error('Error in handleSaveEdit:', err);
-      setError('Failed to save changes. Please try again.');
-    } finally {
-      setActionLoading(prev => ({ ...prev, [selectedRequest.id]: false }));
+    } catch (error) {
+      console.error('Error in handleSaveEdit:', error);
     }
   };
 
-  // Filter requests - memoized to prevent re-calculation on every render
-  const filteredRequests = useCallback((requestList) => {
-    if (!requestList) return [];
+  // Filter requests based on search term
+  const filterRequests = useCallback((requestList) => {
+    if (!searchTerm || !Array.isArray(requestList)) return requestList || [];
     
-    // Skip filtering if search term is empty
-    if (!searchTerm.trim()) return requestList;
-    
+    const term = searchTerm.toLowerCase();
     return requestList.filter(request => 
-      request.reference_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.service_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.full_names?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.primary_contact?.toLowerCase().includes(searchTerm.toLowerCase())
+      request.reference_number?.toLowerCase().includes(term) ||
+      request.service_type?.toLowerCase().includes(term) ||
+      request.full_names?.toLowerCase().includes(term) ||
+      request.primary_contact?.toLowerCase().includes(term)
     );
   }, [searchTerm]);
-  
+
+  // Ensure all request lists are arrays
+  const ensureArray = (list) => Array.isArray(list) ? list : [];
+
+  // Filtered request lists with array safety
+  const filteredAvailable = filterRequests(ensureArray(requests.available));
+  const filteredAssigned = filterRequests(ensureArray(requests.assigned));
+  const filteredSubmitted = filterRequests(ensureArray(requests.submitted));
+  const filteredSentBack = filterRequests(ensureArray(requests.sentBack));
+
+  // Set up auto-refresh interval
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    
+    const interval = setInterval(() => {
+      fetchRequests(currentUser.id);
+    }, 300000); // Refresh every 5 minutes
+    
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]); // Only depend on user ID changing
+
+  if (loading && !currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading user data...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Loading requests...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-center">
-        <div className="w-full max-w-[90%]">
-          <div className="flex flex-col space-y-6">
-            {/* Header */}
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                Service Requests
-              </h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Manage and track service requests
-              </p>
-            </div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Request Management
+            </h1>
+            {/* Removed the description line */}
+          </div>
+          
+          <div className="mt-4 sm:mt-0">
+            {/* Removed "Logged in as" text */}
+            <Button
+              variant="outline"
+              onClick={handleRefresh}
+              disabled={isRefreshing || !currentUser}
+              className="flex items-center"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
 
-            {/* Alerts */}
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+        {/* Alerts */}
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-            {success && (
-              <Alert variant="success" className="bg-green-50 border-green-200 text-green-800">
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertDescription>{success}</AlertDescription>
-              </Alert>
-            )}
+        {success && (
+          <Alert variant="success" className="mb-4 bg-green-50 border-green-200 text-green-800">
+            <CheckCircle className="h-4 w-4 mr-2" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
 
-            {/* Search Input */}
-            <div className="w-full">
-              <div className="relative">
-                <Input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by reference, name, or service type"
-                  className="pl-10"
+        {/* Search Input */}
+        <div className="relative mb-6">
+          <Input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by reference, name, service, or phone"
+            className="pl-10"
+          />
+          <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="available">
+            Available Requests ({filteredAvailable.length})
+          </TabsTrigger>
+          <TabsTrigger value="assigned">
+            My Assigned ({filteredAssigned.length})
+          </TabsTrigger>
+          <TabsTrigger value="submitted">
+            My Submitted ({filteredSubmitted.length})
+          </TabsTrigger>
+          <TabsTrigger value="sent_back">
+            Sent Back ({filteredSentBack.length})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Available Requests Tab */}
+        <TabsContent value="available">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredAvailable.length > 0 ? (
+              filteredAvailable.map((request) => (
+                <RequestCard
+                  key={request.id}
+                  request={request}
+                  onClick={() => handleRequestClick(request)}
+                  isLoading={actionLoading[request.id]}
+                  // Removed actionButton prop with "Assign to me" button
                 />
-                <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-              </div>
-            </div>
-
-            {/* Loading indicator for background polling */}
-            {polling && (
-              <div className="flex justify-center">
-                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              ))
+            ) : (
+              <div className="col-span-full">
+                <Card>
+                  <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
+                    No available requests found
+                  </CardContent>
+                </Card>
               </div>
             )}
+          </div>
+        </TabsContent>
 
-            {/* Tabs */}
-            <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
-                <TabsTrigger value="available">
-                  Available Requests ({filteredRequests(requests.available).length})
-                </TabsTrigger>
-                <TabsTrigger value="my_requests">
-                  My Requests ({filteredRequests(requests.assigned).length})
-                </TabsTrigger>
-                <TabsTrigger value="submitted_requests">
-                  My Submitted Requests ({filteredRequests(requests.submitted).length})
-                </TabsTrigger>
-                <TabsTrigger value="sent_back">
-                  Sent Back to Me ({filteredRequests(requests.sentBack).length})
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Available Requests */}
-              <TabsContent value="available" className="mt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredRequests(requests.available).map((request) => (
-                    <RequestCard
-                      key={request.id}
-                      request={request}
-                      onClick={() => handleRequestClick(request)}
-                      loading={actionLoading[request.id]}
-                    />
-                  ))}
-                </div>
-                {filteredRequests(requests.available).length === 0 && (
-                  <Card>
-                    <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
-                      No available requests found
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              {/* My Requests */}
-              <TabsContent value="my_requests" className="mt-6">
-                <div className="space-y-6">
-                  {/* Active Requests */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">Active Requests</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredRequests(requests.assigned).map((request) => (
-                        <RequestCard
-                          key={request.id}
-                          request={request}
-                          onClick={() => handleRequestClick(request)}
-                          loading={actionLoading[request.id]}
-                        />
-                      ))}
-                    </div>
-                    {filteredRequests(requests.assigned).length === 0 && (
-                      <Card>
-                        <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
-                          No active requests found
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-
-                  {/* Completed Requests */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">Completed Requests</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredRequests(requests.completed).map((request) => (
-                        <RequestCard
-                          key={request.id}
-                          request={request}
-                          onClick={() => handleRequestClick(request)}
-                          loading={actionLoading[request.id]}
-                        />
-                      ))}
-                    </div>
-                    {filteredRequests(requests.completed).length === 0 && (
-                      <Card>
-                        <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
-                          No completed requests found
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* My Submitted Requests */}
-              <TabsContent value="submitted_requests" className="mt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredRequests(requests.submitted).map((request) => (
-                    <RequestCard
-                      key={request.id}
-                      request={request}
-                      onClick={() => handleRequestClick(request)}
-                      loading={actionLoading[request.id]}
-                      />
-                    ))}
-                  </div>
-                  {filteredRequests(requests.submitted).length === 0 && (
-                    <Card>
-                      <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
-                        No submitted requests found
-                      </CardContent>
-                    </Card>
-                  )}
-                </TabsContent>
-   
-                {/* Sent Back Requests */}
-                <TabsContent value="sent_back" className="mt-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredRequests(requests.sentBack).map((request) => (
+        {/* My Assigned Requests Tab */}
+        <TabsContent value="assigned">
+          <div className="space-y-8">
+            {/* Active Requests */}
+            <div>
+              <h3 className="text-lg font-medium mb-4 flex items-center">
+                <div className="w-3 h-3 bg-yellow-400 rounded-full mr-2"></div>
+                Active Requests
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAssigned.filter(r => r.status !== 'completed').length > 0 ? (
+                  filteredAssigned
+                    .filter(r => r.status !== 'completed')
+                    .map((request) => (
                       <RequestCard
                         key={request.id}
                         request={request}
                         onClick={() => handleRequestClick(request)}
-                        loading={actionLoading[request.id]}
+                        isLoading={actionLoading[request.id]}
+                        highlighted={true}
                       />
-                    ))}
-                  </div>
-                  {filteredRequests(requests.sentBack).length === 0 && (
+                    ))
+                ) : (
+                  <div className="col-span-full">
                     <Card>
                       <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
-                        No requests sent back for correction
+                        No active requests found
                       </CardContent>
                     </Card>
-                  )}
-                </TabsContent>
-              </Tabs>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Completed Requests */}
+            <div>
+              <h3 className="text-lg font-medium mb-4 flex items-center">
+                <div className="w-3 h-3 bg-green-400 rounded-full mr-2"></div>
+                Completed Requests
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAssigned.filter(r => r.status === 'completed').length > 0 ? (
+                  filteredAssigned
+                    .filter(r => r.status === 'completed')
+                    .map((request) => (
+                      <RequestCard
+                        key={request.id}
+                        request={request}
+                        onClick={() => handleRequestClick(request)}
+                        isLoading={actionLoading[request.id]}
+                      />
+                    ))
+                ) : (
+                  <div className="col-span-full">
+                    <Card>
+                      <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
+                        No completed requests found
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-   
-        {/* Request Dialog */}
-        {selectedRequest && (
-          <RequestDialog
-            request={selectedRequest}
-            isOpen={isDialogOpen}
-            onClose={() => {
-              setIsDialogOpen(false);
-              setSelectedRequest(null);
-            }}
-            onStatusChange={handleStatusChange}
-            onSubmitResponse={handleSubmitResponse}
-            onSendBackToRequestor={handleSendBackToRequestor}
-            onSaveEdit={handleSaveEdit}
-            loading={actionLoading[selectedRequest.id]}
-            currentUserId={user?.id}
-          />
-        )}
-      </div>
-    );
-   };
-   
-   const TasksPage = () => {
-    return (
-      <TaskProvider>
-        <TasksContent />
-      </TaskProvider>
-    );
-   };
-   
-   export default TasksPage;
+        </TabsContent>
+
+        {/* My Submitted Requests Tab */}
+        <TabsContent value="submitted">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredSubmitted.length > 0 ? (
+              filteredSubmitted.map((request) => (
+                <RequestCard
+                  key={request.id}
+                  request={request}
+                  onClick={() => handleRequestClick(request)}
+                  isLoading={actionLoading[request.id]}
+                />
+              ))
+            ) : (
+              <div className="col-span-full">
+                <Card>
+                  <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
+                    No submitted requests found
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Sent Back Requests Tab */}
+        <TabsContent value="sent_back">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredSentBack.length > 0 ? (
+              filteredSentBack.map((request) => (
+                <RequestCard
+                  key={request.id}
+                  request={request}
+                  onClick={() => handleRequestClick(request)}
+                  isLoading={actionLoading[request.id]}
+                  actionButton={
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRequestClick(request);
+                      }}
+                    >
+                      Edit Request
+                    </Button>
+                  }
+                  highlighted={true}
+                />
+              ))
+            ) : (
+              <div className="col-span-full">
+                <Card>
+                  <CardContent className="p-6 text-center text-gray-500 dark:text-gray-400">
+                    No requests sent back for correction
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Request Dialog */}
+      {selectedRequest && (
+        <RequestDialog
+          request={selectedRequest}
+          isOpen={isDialogOpen}
+          onClose={handleDialogClose}
+          onStatusChange={handleStatusChange}
+          onSubmitResponse={handleSubmitResponse}
+          onSendBackToRequestor={handleSendBackToRequestor}
+          onSaveEdit={handleSaveEdit}
+          isLoading={actionLoading[selectedRequest.id]}
+          currentUser={currentUser}
+        />
+      )}
+    </div>
+  );
+};
+
+const TaskPage = () => {
+  return (
+    <TaskProvider>
+      <TasksContent />
+    </TaskProvider>
+  );
+};
+
+export default TaskPage;

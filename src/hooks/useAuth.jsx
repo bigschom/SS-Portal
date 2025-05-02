@@ -1,4 +1,4 @@
-// src/context/AuthProvider.jsx
+// src/hooks/useAuth.jsx
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import apiService from '../config/api-service';
 
@@ -149,8 +149,6 @@ export const AuthProvider = ({ children }) => {
     try {
       // Call the backend login API
       const result = await apiService.auth.login(username, password);
-      
-      console.log('Login result from API:', result);
   
       // Check for errors from API
       if (result.error) {
@@ -165,23 +163,25 @@ export const AuthProvider = ({ children }) => {
       }
   
       if (result.user) {
-        // Check if password change is required
-        if (result.passwordChangeRequired) {
-          console.log('Password change required, not setting user in state yet');
-          // Store the flag in sessionStorage
+        // Check if password change is explicitly required or password has expired
+        if (result.passwordChangeRequired === true || result.passwordExpired === true) {
+          console.log('Password change required or password expired, requiring change');
           sessionStorage.setItem('passwordChangeRequired', 'true');
-          // Don't set user in state yet, will be set after password change
-          
-          // Return the full result including passwordChangeRequired flag
           return {
             user: result.user,
             error: null,
-            passwordChangeRequired: true
+            passwordChangeRequired: true,
+            passwordExpired: result.passwordExpired || false,
+            daysRemaining: result.daysRemaining || 0
           };
         }
-        
+
+        // Check for password warning (about to expire)
+        if (result.passwordWarning) {
+          console.log('Password warning:', result.passwordWarning);
+        }
+
         // Normal login flow - update user state and storage
-        console.log('Normal login, setting user in state');
         setUser(result.user);
         sessionStorage.setItem('user', JSON.stringify(result.user));
         sessionStorage.removeItem('userLoggedOut');
@@ -193,7 +193,9 @@ export const AuthProvider = ({ children }) => {
         return {
           user: result.user,
           error: null,
-          passwordChangeRequired: false
+          passwordChangeRequired: false,
+          passwordWarning: result.passwordWarning,
+          daysRemaining: result.daysRemaining
         };
       }
   
@@ -204,41 +206,34 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updatePassword = async (userId, newPassword, token = null) => {
+  const updatePassword = async (userId, newPassword, currentPassword = null) => {
     try {
-      console.log('Updating password for user ID:', userId, 'with new password length:', newPassword.length);
-      
-      // If token is provided, temporarily set it in sessionStorage
-      let originalUser = null;
-      if (token) {
-        originalUser = sessionStorage.getItem('user');
-        // Store the temporary user with token for the API call
-        const tempUser = { id: userId, token };
-        sessionStorage.setItem('user', JSON.stringify(tempUser));
+      // First ensure we have a valid token from the temp user
+      const tempUserData = sessionStorage.getItem('tempUser');
+      if (!tempUserData) {
+        return { error: 'Missing user session information. Please try logging in again.' };
       }
       
-      // Call the API to update password
-      const result = await apiService.auth.updatePassword(userId, newPassword);
+      // Check password history to prevent reusing old passwords
+      const passwordHistoryCheck = await apiService.auth.checkPasswordHistory(userId, newPassword);
       
-      // Restore original user if we temporarily changed it
-      if (token && originalUser) {
-        sessionStorage.setItem('user', originalUser);
-      } else if (token) {
-        sessionStorage.removeItem('user');
+      if (passwordHistoryCheck.isRepeatedPassword) {
+        return { 
+          error: 'You cannot reuse your previous passwords. Please choose a different password.' 
+        };
       }
-      
-      console.log('Password update API response:', result);
   
+      // If history check passed, call the API to update password
+      const result = await apiService.auth.updatePassword(userId, newPassword, currentPassword);
+    
       if (result.error) {
-        console.error('Error from API:', result.error);
         return { error: result.error };
       }
-  
+    
       if (!result.user) {
-        console.error('No user returned from API');
         return { error: 'Server did not return updated user information' };
       }
-  
+    
       // Clear any stored user data to force a fresh login
       sessionStorage.removeItem('user');
       sessionStorage.removeItem('passwordChangeRequired');
@@ -251,7 +246,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
   
-  
   const unlockAccount = async (userId) => {
     try {
       const result = await apiService.auth.unlockAccount(userId);
@@ -262,13 +256,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Add this new method for updating temporary passwords
+  // Method for updating temporary passwords
   const updateTempPassword = async (userId, newPassword) => {
     try {
       console.log('Updating temporary password for user ID:', userId);
       
       // Call the API to update temporary password
-      const result = await apiService.users.updateTempPassword(userId, newPassword);
+      const result = await apiService.auth.updateTempPassword(userId, newPassword);
       
       console.log('Temp password update API response:', result);
 

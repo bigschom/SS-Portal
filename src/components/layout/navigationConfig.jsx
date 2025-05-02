@@ -56,6 +56,16 @@ export const roleBasedNavigation = {
           icon: Briefcase
         },
         {
+          name: 'All Internship',
+          path: '/all-internship-background-checks',
+          icon: List
+        },
+        {
+          name: 'Delete Requests',
+          path: '/delete-background-checks',
+          icon: Trash2
+        },
+        {
           name: 'All Request',
           path: '/all-background-checks',
           icon: List
@@ -89,7 +99,7 @@ export const roleBasedNavigation = {
       icon: Lock,
       children: [
         {
-          name: 'Service Queue Management',
+          name: 'Service Queue',
           path: '/security-services/control-panel/queue-management',
           icon: FileCheck
         },
@@ -117,8 +127,8 @@ export const roleBasedNavigation = {
         { name: 'StakeHolder Request Report', path: '/stakeholderreport', icon: FileText },
         { name: 'Backgroung Checks Report', path: '/backgroundcheckreport', icon: FileText },
         { name: 'Internship Report', path: '/internship-report', icon: FileText },
-        { name: 'Guard Shift Report', path: '/guard-shift-report', icon: FileText },
-        { name: 'Guard Shift Report 1', path: '/guard-shift-report-1', icon: FileText },
+        { name: 'Guard Shift Daily Report', path: '/guard-shift-report', icon: FileText },
+        { name: 'Guard Shift Analytics Report', path: '/guard-shift-report-1', icon: FileText },
         {name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
       ]
     },
@@ -168,7 +178,30 @@ export const roleBasedNavigation = {
       path: '/userdashboard', 
       icon: Home 
     },
-    { name: 'Guard Shift Report', path: '/guard-shift-report', icon: FileText },
+    { name: 'Guard Shift Report', 
+      icon: FileText,
+      children: [
+        { name: 'Guard Shift Daily Report', path: '/guard-shift-report', icon: FileText },
+        { name: 'Guard Shift Analytics Report', path: '/guard-shift-report-1', icon: FileText },
+
+      ]
+    },
+    {
+      name: 'Security Services',
+      icon: Lock,
+      children: [
+        {
+          name: 'New Request',
+          path: '/security-services/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'Tasks',    
+          path: '/security-services/task',
+          icon: CheckSquare
+        },
+      ]
+    },
   ],
   security_guard: [
     { 
@@ -186,7 +219,26 @@ export const roleBasedNavigation = {
       path: '/internshipoverview',
       icon: Briefcase
     },
-    { name: 'Equipment Movement Log book', path: '/equipment-movement', icon: Wrench },
+    { name: 'Equipment Movement Log book', 
+      path: '/equipment-movement', 
+      icon: Wrench 
+    },
+    {
+      name: 'Security Services',
+      icon: Lock,
+      children: [
+        {
+          name: 'New Request',
+          path: '/security-services/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'Tasks',    
+          path: '/security-services/task',
+          icon: CheckSquare
+        },
+      ]
+    },
   ],
   user: [
     { 
@@ -297,6 +349,22 @@ export const roleBasedNavigation = {
         },
       ]
     },
+    {
+      name: 'Security Services',
+      icon: Lock,
+      children: [
+        {
+          name: 'New Request',
+          path: '/security-services/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'Tasks',    
+          path: '/security-services/task',
+          icon: CheckSquare
+        },
+      ]
+    },
 
     {
       name: 'Reports',
@@ -326,6 +394,22 @@ export const roleBasedNavigation = {
           name: 'All Request',
           path: '/all-stake-holder-request',
           icon: List
+        },
+      ]
+    },
+    {
+      name: 'Security Services',
+      icon: Lock,
+      children: [
+        {
+          name: 'New Request',
+          path: '/security-services/new-request',
+          icon: FileCheck
+        },
+        {
+          name: 'Tasks',    
+          path: '/security-services/task',
+          icon: CheckSquare
         },
       ]
     },

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
+import apiService from './config/api-service';
 import { getRoleBasedDashboard } from './utils/roleRoutes';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Loader2 } from 'lucide-react';
@@ -25,6 +26,8 @@ import UpdateBackgroundChecks from './pages/background-checks/UpdateRequest';
 import InternshipOverview from './pages/background-checks/InternshipOverview';
 import AllBackgroundChecks from './pages/background-checks/AllRequest';
 import BackgroundCheckReport from './pages/report/BackgroundCheckReport';
+import DeleteBackgroundChecks from './pages/background-checks/DeleteBackgroundChecks';
+import AllInternshipBackgroundChecks from './pages/background-checks/AllInternshipBackgroundChecks';
 
 // Stakeholder Pages
 import NewStakeHRequest from './pages/stakeholder/NewRequest';
@@ -37,8 +40,8 @@ import InternshipReport from './pages/report/InternshipReport';
 // Service
 import QueueManagement from './pages/security-services/control-panel/QueueManagement';
 import SecurityServices from './pages/security-services/new-request';
-// import TaskManagement from './pages/security-services/task';
 import TasksPage from './pages/security-services/task/TaskPage';
+import ServiceManagement from './pages/security-services/control-panel/service-management'
 
 // GuardShiftForm Pages
 import GuardShiftForm from './pages/guardshift/GuardShiftForm';
@@ -49,14 +52,6 @@ import GuardShiftReport1 from './pages/report/GuardShiftReport1';
 import EquipmentMovementLog from './pages/equipment-movement/EquipmentMovementLog';
 import EquipmentMovementReport from './pages/report/EquipmentMovementReport';
 import EquipmentDatabaseManagement from './pages/equipment-movement/EquipmentDatabaseManagement';
-
-// Cleaner Profile Book
-//import CleanerProfileBook from './pages/cleaner-profiles/cleaner-profile-book';
-
-// Security Technical Issue 
-
-//import SecurityIssueBook from './pages/security-technical-issues/security-issue-book';
-//import TechnicianFillPage from './pages/technician-fill/technician-fill-page'
 
 // Contact Page
 import Contact from './pages/Contact';
@@ -107,7 +102,7 @@ const AuthenticatedLayout = ({ children }) => {
 };
 
 const App = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -145,33 +140,62 @@ const App = () => {
 
   // Track user activity to prevent session timeouts
   useEffect(() => {
-    if (!user) return;
+    // Function to handle inactivity and session timeout
+    const checkAndHandleInactivity = async () => {
+      if (!user) return;
 
-    const trackActivity = async () => {
       try {
-        // This is implemented in your updated api-service.js
-        const response = await fetch('/api/auth/track-activity', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${user.token}`
+        // Track activity
+        await apiService.auth.trackActivity();
+
+        // Optional: Check for potential timeout
+        const activityCheck = await apiService.auth.getCurrentActivity();
+        
+        // If the backend indicates session should be terminated
+        if (activityCheck?.shouldLogout) {
+          logout();
+          navigate('/login');
+          
+          if (window.toastService) {
+            window.toastService.warning('Your session has expired due to inactivity.');
           }
-        });
-        if (!response.ok) {
-          console.warn('Failed to track user activity');
         }
       } catch (error) {
-        console.error('Error tracking activity:', error);
+        console.error('Error during activity tracking:', error);
+        
+        // Fallback logout mechanism
+        if (error.response?.status === 401) {
+          logout();
+          navigate('/login');
+        }
       }
     };
     
-    // Track activity every 15 minutes
-    const activityInterval = setInterval(trackActivity, 15 * 60 * 1000);
+    // Track activity immediately and then every 15 minutes
+    checkAndHandleInactivity();
+    const activityInterval = setInterval(checkAndHandleInactivity, 15 * 60 * 1000);
+    
+    // Set up global event listeners for user activity
+    const resetActivityTimer = () => {
+      if (user) {
+        checkAndHandleInactivity();
+      }
+    };
+
+    // Listen to various user interaction events
+    window.addEventListener('mousemove', resetActivityTimer);
+    window.addEventListener('keydown', resetActivityTimer);
+    window.addEventListener('click', resetActivityTimer);
+    window.addEventListener('scroll', resetActivityTimer);
     
     return () => {
       clearInterval(activityInterval);
+      window.removeEventListener('mousemove', resetActivityTimer);
+      window.removeEventListener('keydown', resetActivityTimer);
+      window.removeEventListener('click', resetActivityTimer);
+      window.removeEventListener('scroll', resetActivityTimer);
     };
-  }, [user]);
+  }, [user, logout, navigate]);
 
   if (loading) {
     return <LoadingFallback />;
@@ -195,59 +219,49 @@ const App = () => {
           <Route path="/user-management" element={<ProtectedRoute requiredRoles={['admin']}><AuthenticatedLayout><UserManagement /></AuthenticatedLayout></ProtectedRoute>} />
 
           {/* Background Check routes */}
-          <Route path="/new-request" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><NewRequest /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/update-background-checks/:id" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><UpdateBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/internshipoverview" element={<ProtectedRoute requiredRoles={['admin',, 'security_guard','user']}><AuthenticatedLayout><InternshipOverview /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/all-background-checks" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><AllBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/backgroundcheckreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><BackgroundCheckReport /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/internship-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><InternshipReport /></AuthenticatedLayout></ProtectedRoute>} />
-          
-          {/* Stakeholder routes */}
-          <Route path="/new-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><NewStakeHRequest /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/update-stake-holder-request/:id" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><UpdateStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/all-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user','user2']}><AuthenticatedLayout><AllStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/stakeholderreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><StakeholderReport /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/delete-stake-holder-requests" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><DeleteStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/new-request" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><NewRequest /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/update-background-checks/:id" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><UpdateBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/internshipoverview" element={<ProtectedRoute requiredRoles={['admin',, 'security_guard','user']}><AuthenticatedLayout><InternshipOverview /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/all-background-checks" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><AllBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/backgroundcheckreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user1']}><AuthenticatedLayout><BackgroundCheckReport /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/internship-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><InternshipReport /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/delete-background-checks" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><DeleteBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/all-internship-background-checks" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><AllInternshipBackgroundChecks /></AuthenticatedLayout></ProtectedRoute>} />
+
+{/* Stakeholder routes */}
+<Route path="/new-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><NewStakeHRequest /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/update-stake-holder-request/:id" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><UpdateStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/all-stake-holder-request" element={<ProtectedRoute requiredRoles={['admin','user','user2']}><AuthenticatedLayout><AllStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/stakeholderreport" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><StakeholderReport /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/delete-stake-holder-requests" element={<ProtectedRoute requiredRoles={['admin','user', 'user2']}><AuthenticatedLayout><DeleteStakeHRequests /></AuthenticatedLayout></ProtectedRoute>} />
 
 
-            {/* Security service routes */}
-          <Route path="/security-services/control-panel/queue-management" element={<ProtectedRoute requiredRoles={['admin','user']}> <AuthenticatedLayout> <QueueManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
-          
-          {/* Add routes for other security service pages when they're ready */}
-          
-          <Route path="/security-services/new-request" element={<ProtectedRoute requiredRoles={['admin', 'user']}> <AuthenticatedLayout> <SecurityServices /> </AuthenticatedLayout> </ProtectedRoute>}/>
-        {/*   <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}><AuthenticatedLayout> <TaskManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
-          */}
-          <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}> <AuthenticatedLayout> <TasksPage /> </AuthenticatedLayout> </ProtectedRoute>}/>
+  {/* Security service routes */}
+<Route path="/security-services/control-panel/queue-management" element={<ProtectedRoute requiredRoles={['admin','user']}> <AuthenticatedLayout> <QueueManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
+<Route path="/security-services/control-panel/service-management" element={<ProtectedRoute requiredRoles={['admin','user']}> <AuthenticatedLayout> <ServiceManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
 
-          {/* GuardShift routes */}
-          <Route path="/guard-shift" element={<ProtectedRoute requiredRoles={['admin','user','security_guard']}><AuthenticatedLayout><GuardShiftForm /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/guard-shift-report" element={<ProtectedRoute requiredRoles={['admin','user','standarduser']}><AuthenticatedLayout><GuardShiftReport /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/guard-shift-report-1" element={<ProtectedRoute requiredRoles={['admin','user','standarduser']}><AuthenticatedLayout><GuardShiftReport1 /></AuthenticatedLayout></ProtectedRoute>} />
+{/* Add routes for other security service pages when they're ready */}
 
+<Route path="/security-services/new-request" element={<ProtectedRoute requiredRoles={['admin','standarduser', 'security_guard','user', 'user1', 'user2']}> <AuthenticatedLayout> <SecurityServices /> </AuthenticatedLayout> </ProtectedRoute>}/>
+{/*   <Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'user']}><AuthenticatedLayout> <TaskManagement /> </AuthenticatedLayout> </ProtectedRoute>}/>
+*/}
+<Route path="/security-services/task" element={<ProtectedRoute requiredRoles={['admin', 'standarduser', 'security_guard','user', 'user1', 'user2']}> <AuthenticatedLayout> <TasksPage /> </AuthenticatedLayout> </ProtectedRoute>}/>
 
-
-          {/* Equipment Routes */} 
-          <Route path="/equipment-movement" element={<ProtectedRoute requiredRoles={['admin','user','security_guard']}><AuthenticatedLayout><EquipmentMovementLog /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="Equipment-database-management" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentDatabaseManagement /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/equipment-movement-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementReport /></AuthenticatedLayout></ProtectedRoute>} />
-
-           
-
-            {/* Cleaners Routes 
-          <Route path="/cleaner-profile-book" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><CleanerProfileBook /></AuthenticatedLayout></ProtectedRoute>} />
-
-          */}
+{/* GuardShift routes */}
+<Route path="/guard-shift" element={<ProtectedRoute requiredRoles={['admin','user','security_guard']}><AuthenticatedLayout><GuardShiftForm /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/guard-shift-report" element={<ProtectedRoute requiredRoles={['admin','user','standarduser']}><AuthenticatedLayout><GuardShiftReport /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/guard-shift-report-1" element={<ProtectedRoute requiredRoles={['admin','user','standarduser']}><AuthenticatedLayout><GuardShiftReport1 /></AuthenticatedLayout></ProtectedRoute>} />
 
 
-          {/* Security technical Routes 
-          <Route path="/security-issue-book" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><SecurityIssueBook /></AuthenticatedLayout></ProtectedRoute>} />
-          <Route path="/security-technician-fill-page" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><TechnicianFillPage /></AuthenticatedLayout></ProtectedRoute>} />
-          
-          */}
 
-          {/* Contact route */}
-          <Route path="/contact" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><Contact /></AuthenticatedLayout></ProtectedRoute>} />
+{/* Equipment Routes */} 
+<Route path="/equipment-movement" element={<ProtectedRoute requiredRoles={['admin','user','security_guard']}><AuthenticatedLayout><EquipmentMovementLog /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="Equipment-database-management" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentDatabaseManagement /></AuthenticatedLayout></ProtectedRoute>} />
+<Route path="/equipment-movement-report" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><EquipmentMovementReport /></AuthenticatedLayout></ProtectedRoute>} />
+
+{/* Contact route */}
+<Route path="/contact" element={<ProtectedRoute requiredRoles={['admin','user']}><AuthenticatedLayout><Contact /></AuthenticatedLayout></ProtectedRoute>} />
+
 
           {/* Root route redirect - using a component to prevent infinite loops */}
           <Route path="/" element={<RootRedirect />} />

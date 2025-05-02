@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -16,14 +16,15 @@ import {
   Unlock,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Calendar
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import apiService from '../../config/api-service';
 import { useAuth } from '../../hooks/useAuth';
 import useRoleCheck from '../../hooks/useRoleCheck';
 
-// Toast Notification Component - Moved to bottom
+// Toast Notification Component
 const Toast = ({ type, message, onClose }) => {
   return (
     <motion.div
@@ -66,7 +67,12 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
     role: '',
     is_active: true
   });
+  const [usernameAvailable, setUsernameAvailable] = useState(true);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameModified, setUsernameModified] = useState(false);
+  const [originalUsername, setOriginalUsername] = useState('');
 
+  // Reset state when modal opens/closes or user changes
   useEffect(() => {
     if (user) {
       setFormData({
@@ -75,6 +81,9 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
         role: user.role || '',
         is_active: user.is_active ?? true
       });
+      setOriginalUsername(user.username || '');
+      setUsernameModified(false);
+      setUsernameAvailable(true);
     } else {
       setFormData({
         username: '',
@@ -82,8 +91,66 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
         role: '',
         is_active: true
       });
+      setOriginalUsername('');
+      setUsernameModified(false);
+      setUsernameAvailable(true);
     }
-  }, [user]);
+  }, [user, isOpen]);
+
+  // Auto-generate username when full_name changes (only in create mode)
+  useEffect(() => {
+    if (mode === 'create' && formData.full_name && !usernameModified) {
+      const generatedUsername = generateUsername(formData.full_name);
+      setFormData(prev => ({ ...prev, username: generatedUsername }));
+      
+      // Show loading spinner briefly without validation
+      checkUsernameAvailability(generatedUsername);
+    }
+  }, [formData.full_name, mode, usernameModified]);
+
+  // Check username availability
+  const checkUsernameAvailability = async (username) => {
+    // No need to check availability anymore as backend will handle it
+    if (!username) {
+      return;
+    }
+
+    // If in edit mode and username is unchanged, it's always valid
+    if (mode === 'edit' && username === originalUsername) {
+      return;
+    }
+
+    // We'll just set checkingUsername during typing to show the spinner
+    // But we won't actually perform the check or display any validation results
+    setCheckingUsername(true);
+    
+    // Simulate a brief delay to show the spinner then hide it
+    setTimeout(() => {
+      setCheckingUsername(false);
+    }, 300);
+  };
+
+  // Handle username change with debounce
+  const handleUsernameChange = (e) => {
+    const newUsername = e.target.value;
+    setFormData({ ...formData, username: newUsername });
+    setUsernameModified(true);
+    
+    // Debounce the API call
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      checkUsernameAvailability(newUsername);
+    }, 500);
+  };
+
+  const timeoutRef = useRef(null);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const roles = [
     { value: 'admin', label: 'Administrator' },
@@ -97,6 +164,7 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!usernameAvailable) return;
     onSubmit(formData);
   };
 
@@ -124,21 +192,6 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Username
-            </label>
-            <input
-              type="text"
-              value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 
-                       bg-white dark:bg-gray-900 text-gray-900 dark:text-white
-                       focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Full Name
             </label>
             <input
@@ -149,7 +202,29 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
                        focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
               required
+              autoFocus
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Username
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.username}
+                onChange={handleUsernameChange}
+                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700
+                           bg-white dark:bg-gray-900 text-gray-900 dark:text-white
+                           focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
+                required
+              />
+              {checkingUsername && (
+                <Loader2 className="absolute right-3 top-2.5 h-5 w-5 text-gray-400 animate-spin" />
+              )}
+            </div>
+            {/* No error message - removed as requested */}
           </div>
 
           <div>
@@ -162,6 +237,7 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
               className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 
                        bg-white dark:bg-gray-900 text-gray-900 dark:text-white
                        focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white"
+              required
             >
               <option value="">Select a role</option>
               {roles.map((role) => (
@@ -195,7 +271,7 @@ const UserModal = ({ isOpen, mode, user, onClose, onSubmit }) => {
             >
               Cancel
             </button>
-            <button
+                          <button
               type="submit"
               className="flex items-center px-4 py-2 bg-[#0A2647] dark:bg-white text-white dark:text-[#0A2647] rounded-lg
                       hover:bg-[#0A2647]/90 dark:hover:bg-gray-200 transition-colors"
@@ -309,6 +385,30 @@ const ConfirmationModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
   );
 };
 
+// Utility function for username generation
+const generateUsername = (fullName) => {
+  if (!fullName) return '';
+  
+  // Remove special characters and convert to lowercase
+  const cleanName = fullName.replace(/[^a-zA-Z\s]/g, '').toLowerCase();
+  
+  // Split name and create username
+  const nameParts = cleanName.split(' ').filter(part => part.trim() !== '');
+  
+  if (nameParts.length === 0) return '';
+  
+  // First 6 chars of first name + first char of last name for all cases
+  // If only one name, treat it as both first and last name
+  const firstName = nameParts[0];
+  const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
+    
+  // Handle first name with different lengths
+  const firstPart = firstName.length > 6 ? firstName.substring(0, 6) : firstName;
+  const lastPart = lastName.charAt(0);
+    
+  return firstPart + lastPart;
+};
+
 // Main UserManagement Component
 const UserManagement = () => {
   const navigate = useNavigate();
@@ -381,16 +481,22 @@ const UserManagement = () => {
   // Handle create user
   const handleCreateUser = async (userData) => {
     try {
+      // If no username is provided, generate one
+      if (!userData.username) {
+        const generatedUsername = generateUsername(userData.full_name);
+        userData.username = generatedUsername;
+      }
+
       const tempPassword = generateTempPassword();
       
-      // Call the API to create a user - don't hash the password here
+      // Call the API to create a user with username instead of ID
       const result = await apiService.users.createUser({
         username: userData.username,
         full_name: userData.full_name,
         role: userData.role,
         is_active: userData.is_active,
         tempPassword,
-        created_by: currentUser.id
+        created_by: currentUser.username
       });
     
       if (result.error) {
@@ -411,7 +517,7 @@ const UserManagement = () => {
       try {
         if (apiService.activityLog && apiService.activityLog.logActivity) {
           await apiService.activityLog.logActivity({
-            userId: currentUser.id,
+            userId: currentUser.id, // We still need ID for the log itself
             description: `Created new user: ${userData.username}`,
             type: 'user_management'
           });
@@ -424,6 +530,28 @@ const UserManagement = () => {
       showToast('error', `Error creating user: ${error.message || 'Unknown error'}`);
     }
   };
+
+  // Add password expiration check
+  const isPasswordExpired = (user) => {
+    if (!user.password_expires_at) return false;
+    
+    const expirationDate = new Date(user.password_expires_at);
+    const currentDate = new Date();
+    
+    return currentDate > expirationDate;
+  };
+
+  // Calculate days until password expiration
+  const getDaysUntilExpiration = (user) => {
+    if (!user.password_expires_at) return null;
+    
+    const expirationDate = new Date(user.password_expires_at);
+    const currentDate = new Date();
+    const timeDiff = expirationDate.getTime() - currentDate.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    
+    return daysDiff;
+  };
   
   // Handle update user
   const handleUpdateUser = async (userData) => {
@@ -433,13 +561,13 @@ const UserManagement = () => {
         ? userData.is_active === 'true' 
         : Boolean(userData.is_active);
       
-      // Call the API to update a user
+      // Call the API to update a user, using username instead of user ID
       const result = await apiService.users.updateUser(selectedUser.id, {
         username: userData.username,
         full_name: userData.full_name,
         role: userData.role,
         is_active: isActive,
-        updated_by: currentUser.id
+        updated_by: currentUser.username // Store username instead of ID
       });
     
       if (result.error) {
@@ -455,7 +583,7 @@ const UserManagement = () => {
       try {
         if (apiService.activityLog && apiService.activityLog.logActivity) {
           await apiService.activityLog.logActivity({
-            userId: currentUser.id,
+            userId: currentUser.id, // Still need ID for the activity log
             description: `Updated user: ${userData.username}`,
             type: 'user_management'
           });
@@ -474,10 +602,10 @@ const UserManagement = () => {
     try {
       const tempPassword = generateTempPassword();
       
-      // Call the API to reset password
+      // Call the API to reset password, using username instead of ID
       const result = await apiService.users.resetPassword(userId, {
         tempPassword,
-        updated_by: currentUser.id
+        updated_by: currentUser.username // Store username instead of ID
       });
     
       if (result.error) {
@@ -493,7 +621,7 @@ const UserManagement = () => {
       try {
         if (apiService.activityLog && apiService.activityLog.logActivity) {
           await apiService.activityLog.logActivity({
-            userId: currentUser.id,
+            userId: currentUser.id, // Still need ID for the activity log
             description: `Reset password for user ID: ${userId}`,
             type: 'user_management'
           });
@@ -650,9 +778,65 @@ const UserManagement = () => {
     );
   });
 
+  // Password expiration display helper
+  const renderPasswordExpiration = (user) => {
+    if (!user.password_expires_at) {
+      return 'Not set';
+    }
+    
+    if (isPasswordExpired(user)) {
+      return (
+        <span className="flex items-center text-red-500 font-medium">
+          <AlertTriangle className="mr-2 h-4 w-4" />
+          Expired - Change Required
+        </span>
+      );
+    } else {
+      const daysLeft = getDaysUntilExpiration(user);
+      if (daysLeft === null) return 'Not set';
+      
+      if (daysLeft <= 0) {
+        return (
+          <span className="flex items-center text-red-500 font-medium">
+            <AlertTriangle className="mr-2 h-4 w-4" />
+            Expired Today
+          </span>
+        );
+      } else if (daysLeft === 1) {
+        return (
+          <span className="flex items-center text-orange-500 font-medium">
+            <Calendar className="mr-2 h-4 w-4" />
+            Expires Tomorrow
+          </span>
+        );
+      } else if (daysLeft <= 5) {
+        return (
+          <span className="flex items-center text-orange-500 font-medium">
+            <Calendar className="mr-2 h-4 w-4" />
+            Expires in {daysLeft} Days
+          </span>
+        );
+      } else if (daysLeft <= 10) {
+        return (
+          <span className="flex items-center text-yellow-500 font-medium">
+            <Calendar className="mr-2 h-4 w-4" />
+            {daysLeft} Days Left
+          </span>
+        );
+      } else {
+        return (
+          <span className="flex items-center text-green-500 font-medium">
+            <CheckCircle className="mr-2 h-4 w-4" />
+            Valid ({daysLeft} Days)
+          </span>
+        );
+      }
+    }
+  };
+
   return (
     <div className="p-6">
-      {/* Toast notification - now at the bottom */}
+      {/* Toast notification */}
       <AnimatePresence>
         {toast && (
           <Toast 
@@ -717,6 +901,15 @@ const UserManagement = () => {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <colgroup>
+                <col className="w-1/7" />{/* Username */}
+                <col className="w-1/7" />{/* Full Name */}
+                <col className="w-1/7" />{/* Role */}
+                <col className="w-1/7" />{/* Status */}
+                <col className="w-1/7" />{/* Last Login */}
+                <col className="w-1/7" />{/* Password Expiration */}
+                <col className="w-1/7" />{/* Actions */}
+              </colgroup>
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -734,6 +927,9 @@ const UserManagement = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Last Login
                   </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Password Expiration
+                  </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Actions
                   </th>
@@ -742,13 +938,13 @@ const UserManagement = () => {
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-4 text-center">
+                    <td colSpan="7" className="px-6 py-4 text-center">
                       <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#0A2647] dark:text-white" />
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan="7" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                       No users found
                     </td>
                   </tr>
@@ -765,12 +961,19 @@ const UserManagement = () => {
                         {user.role}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-xs leading-5 font-semibold text-gray-800 dark:text-gray-200">
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          user.is_active 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
+                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                        }`}>
                           {user.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {renderPasswordExpiration(user)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-2">
@@ -797,7 +1000,7 @@ const UserManagement = () => {
                           >
                             <Key className="h-4 w-4" />
                           </button>
-                          {!user.is_active && (
+                          {user.failed_login_attempts > 0 && (
                             <button
                               onClick={() => showConfirmation(
                                 () => handleUnlockAccount(user.id),

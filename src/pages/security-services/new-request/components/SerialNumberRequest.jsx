@@ -1,83 +1,73 @@
-// src/pages/security-services/new-request/components/SerialNumberRequest.jsx
-import React, { useState, useEffect } from 'react';
+// src/pages/security-services/components/services/SerialNumberRequest.jsx
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Smartphone, Loader2, CheckCircle, Plus, X } from 'lucide-react';
-import { Button } from '../../../../components/ui/button';
-import { Input } from '../../../../components/ui/input';
-import { Label } from '../../../../components/ui/label';
-import { Textarea } from '../../../../components/ui/textarea';
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription, 
-  CardContent, 
-  CardFooter 
-} from '../../../../components/ui/card';
-import { useToast } from '../../../../components/ui/use-toast';
-import { useFormContext } from '../context/FormContext';
-import { useAuth } from '../../../../hooks/useAuth';
+import { ArrowLeft, Smartphone, Plus, XCircle } from 'lucide-react';
+import { useToast, ToastProvider, ToastViewport } from '../../../../components/ui/toast';
 import apiService from '../../../../config/api-service';
 
 const SerialNumberRequest = ({ onBack, serviceType }) => {
   const { toast } = useToast();
-  const { user } = useAuth();
-  const { 
-    formData, 
-    updateFormData, 
-    formErrors, 
-    updateFormErrors, 
-    clearErrors,
-    isSubmitting,
-    setIsSubmitting,
-    hasError,
-    getErrorMessage,
-    generateReferenceNumber
-  } = useFormContext();
-  
+  const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [referenceNumber, setReferenceNumber] = useState('');
+
+  // Form state
+  const [formData, setFormData] = useState({
+    full_names: '',
+    id_passport: '',
+    primary_contact: '',
+    secondary_contact: '',
+    details: ''
+  });
+
+  // Phone requests state
   const [phoneRequests, setPhoneRequests] = useState([
     { phone_number: '', phone_brand: '', start_date: '', end_date: '' }
   ]);
 
-  // Initialize form fields
-  useEffect(() => {
-    updateFormData({
-      full_names: formData.full_names || '',
-      id_passport: formData.id_passport || '',
-      primary_contact: formData.primary_contact || '',
-      secondary_contact: formData.secondary_contact || '',
-      details: formData.details || '',
-    });
-  }, []);
+  // Form errors state
+  const [formErrors, setFormErrors] = useState({});
 
+  // Handle input changes for main form
   const handleChange = (e) => {
     const { name, value } = e.target;
-    updateFormData({ [name]: value });
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     
-    // Clear error when user types
-    if (hasError(name)) {
-      clearErrors([name]);
+    // Clear the specific error when user starts typing
+    if (formErrors[name]) {
+      const newErrors = { ...formErrors };
+      delete newErrors[name];
+      setFormErrors(newErrors);
     }
   };
 
+  // Handle input changes for phone requests
   const handlePhoneRequestChange = (index, field, value) => {
     const updatedRequests = [...phoneRequests];
     updatedRequests[index][field] = value;
     setPhoneRequests(updatedRequests);
     
-    // Clear field-specific error if exists
+    // Clear specific error
     const errorKey = `phoneRequests.${index}.${field}`;
-    if (hasError(errorKey)) {
-      clearErrors([errorKey]);
+    if (formErrors[errorKey]) {
+      const newErrors = { ...formErrors };
+      delete newErrors[errorKey];
+      setFormErrors(newErrors);
     }
   };
 
+  // Add another phone request
   const addPhoneRequest = () => {
-    setPhoneRequests([...phoneRequests, { phone_number: '', phone_brand: '', start_date: '', end_date: '' }]);
+    setPhoneRequests([
+      ...phoneRequests, 
+      { phone_number: '', phone_brand: '', start_date: '', end_date: '' }
+    ]);
   };
 
+  // Remove a phone request
   const removePhoneRequest = (index) => {
     if (phoneRequests.length > 1) {
       const updatedRequests = [...phoneRequests];
@@ -86,10 +76,12 @@ const SerialNumberRequest = ({ onBack, serviceType }) => {
     }
   };
 
+  // Validate form
   const validateForm = () => {
     const errors = {};
     const phoneRegex = /^07\d{8}$/;
 
+    // Validate personal information
     if (!formData.full_names) {
       errors.full_names = 'Full name is required';
     }
@@ -125,31 +117,34 @@ const SerialNumberRequest = ({ onBack, serviceType }) => {
       }
     });
 
-    updateFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    return errors;
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    // Validate form
+    const validationErrors = validateForm();
+    
+    if (Object.keys(validationErrors).length > 0) {
+      setFormErrors(validationErrors);
       toast({
         variant: "destructive",
         title: "Validation Error",
-        description: "Please fill all required fields correctly.",
+        description: "Please fill all required fields correctly."
       });
       return;
     }
   
     try {
-      setIsSubmitting(true);
+      setIsLoading(true);
       
-      // Use the API service instead of direct DB calls
       const result = await apiService.securityServices.submitSerialNumberRequest({
         formData,
         phoneRequests,
         serviceType,
-        userId: user.id
+        userId: null // Set to null as we're not using authentication in this version
       });
       
       if (result.error) {
@@ -160,9 +155,8 @@ const SerialNumberRequest = ({ onBack, serviceType }) => {
       setIsSuccess(true);
       
       toast({
-        variant: "success",
-        title: "Request Submitted",
-        description: "Your serial number request has been submitted successfully.",
+        title: "Success",
+        description: "Your serial number request has been submitted successfully."
       });
       
     } catch (error) {
@@ -171,17 +165,17 @@ const SerialNumberRequest = ({ onBack, serviceType }) => {
       toast({
         variant: "destructive",
         title: "Submission Error",
-        description: "Failed to submit your request. Please try again.",
+        description: "Failed to submit your request. Please try again."
       });
       
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
+  // Reset form for a new request
   const handleNewRequest = () => {
-    // Reset form data
-    updateFormData({
+    setFormData({
       full_names: '',
       id_passport: '',
       primary_contact: '',
@@ -191,332 +185,423 @@ const SerialNumberRequest = ({ onBack, serviceType }) => {
     setPhoneRequests([
       { phone_number: '', phone_brand: '', start_date: '', end_date: '' }
     ]);
-    clearErrors();
+    setFormErrors({});
     setIsSuccess(false);
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
-      <div className="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
-        <Button 
-          variant="ghost" 
-          onClick={onBack} 
-          className="mb-6 text-gray-600 dark:text-gray-300"
-          disabled={isSubmitting}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Services
-        </Button>
+    <ToastProvider>
+      <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white relative">
+        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          {/* Header with back button */}
+          <div className="flex items-center space-x-3 mb-6">
+            <button
+              type="button"
+              onClick={onBack}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              disabled={isLoading}
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-semibold">Request Serial Number</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Request for device IMEI
+              </p>
+            </div>
+          </div>
+          
+          {!isSuccess ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                {/* Left Panel - Personal Information */}
+                <div className="lg:col-span-4">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 space-y-6"
+                  >
+                    {/* Photo Section */}
+                    <div className="flex flex-col items-center mb-6">
+                      <div className="w-40 h-40 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 dark:text-gray-500">
+                          <Smartphone className="w-20 h-20" />
+                        </div>
+                      </div>
+                    </div>
 
-        {!isSuccess ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <Card className="border-gray-200 dark:border-gray-700">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <Smartphone className="h-6 w-6 text-blue-500" />
-                  <div>
-                    <CardTitle className="text-xl text-gray-900 dark:text-white">Request Serial Number</CardTitle>
-                    <CardDescription className="text-gray-500 dark:text-gray-400">
-                      Request for device IMEI or SIM card serial number
-                    </CardDescription>
-                  </div>
+                    {/* Personal Information Fields */}
+                    <div className="space-y-4">
+                      {/* Full Name Input */}
+                      <div>
+                        <input
+                          name="full_names"
+                          value={formData.full_names}
+                          onChange={handleChange}
+                          placeholder="Full Names"
+                          className={`w-full px-4 py-2 rounded-lg border 
+                                    ${formErrors.full_names ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'}
+                                    bg-white dark:bg-gray-800 dark:text-white
+                                    focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent`}
+                        />
+                        {formErrors.full_names && (
+                          <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                            {formErrors.full_names}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* ID/Passport Input */}
+                      <div>
+                        <input
+                          name="id_passport"
+                          value={formData.id_passport}
+                          onChange={handleChange}
+                          placeholder="ID Number"
+                          className={`w-full px-4 py-2 rounded-lg border 
+                                    ${formErrors.id_passport ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'}
+                                    bg-white dark:bg-gray-800 dark:text-white
+                                    focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent`}
+                        />
+                        {formErrors.id_passport && (
+                          <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                            {formErrors.id_passport}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Primary Contact Input */}
+                      <div>
+                        <input
+                          name="primary_contact"
+                          value={formData.primary_contact}
+                          onChange={handleChange}
+                          placeholder="Primary Contact (07XXXXXXXX)"
+                          className={`w-full px-4 py-2 rounded-lg border 
+                                    ${formErrors.primary_contact ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'}
+                                    bg-white dark:bg-gray-800 dark:text-white
+                                    focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent`}
+                        />
+                        {formErrors.primary_contact && (
+                          <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                            {formErrors.primary_contact}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Secondary Contact Input */}
+                      <div>
+                        <input
+                          name="secondary_contact"
+                          value={formData.secondary_contact}
+                          onChange={handleChange}
+                          placeholder="Secondary Contact (Optional)"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600
+                                    bg-white dark:bg-gray-800 dark:text-white
+                                    focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
                 </div>
-              </CardHeader>
-              
-              <CardContent>
-                <form id="serial-number-form" onSubmit={handleSubmit}>
-                  <div className="space-y-6">
-                    {/* Personal Information Section */}
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Personal Information</h3>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="full_names">
-                            Full Name <span className="text-red-500">*</span>
-                          </Label>
-                          <Input
-                            id="full_names"
-                            name="full_names"
-                            value={formData.full_names || ''}
-                            onChange={handleChange}
-                            className={hasError('full_names') ? 'border-red-500 dark:border-red-800' : ''}
-                            disabled={isSubmitting}
-                          />
-                          {hasError('full_names') && (
-                            <p className="text-sm text-red-500">{getErrorMessage('full_names')}</p>
-                          )}
-                        </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="id_passport">
-                            ID Number <span className="text-red-500">*</span>
-                          </Label>
-                          <Input
-                            id="id_passport"
-                            name="id_passport"
-                            value={formData.id_passport || ''}
-                            onChange={handleChange}
-                            className={hasError('id_passport') ? 'border-red-500 dark:border-red-800' : ''}
-                            disabled={isSubmitting}
-                          />
-                          {hasError('id_passport') && (
-                            <p className="text-sm text-red-500">{getErrorMessage('id_passport')}</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="primary_contact">
-                            Primary Contact <span className="text-red-500">*</span>
-                          </Label>
-                          <Input
-                            id="primary_contact"
-                            name="primary_contact"
-                            placeholder="07XXXXXXXX"
-                            value={formData.primary_contact || ''}
-                            onChange={handleChange}
-                            className={hasError('primary_contact') ? 'border-red-500 dark:border-red-800' : ''}
-                            disabled={isSubmitting}
-                          />
-                          {hasError('primary_contact') && (
-                            <p className="text-sm text-red-500">{getErrorMessage('primary_contact')}</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="secondary_contact">
-                            Secondary Contact
-                          </Label>
-                          <Input
-                            id="secondary_contact"
-                            name="secondary_contact"
-                            placeholder="07XXXXXXXX (Optional)"
-                            value={formData.secondary_contact || ''}
-                            onChange={handleChange}
-                            disabled={isSubmitting}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Phone Requests Section */}
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Phone Information</h3>
-                      
-                      {phoneRequests.map((request, index) => (
-                        <div 
-                          key={index}
-                          className="mb-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg relative"
-                        >
-                          {phoneRequests.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="absolute top-2 right-2 h-8 w-8 p-0 text-gray-500 hover:text-red-500"
-                              onClick={() => removePhoneRequest(index)}
-                            >
-                              <X className="h-4 w-4" />
-                              <span className="sr-only">Remove</span>
-                            </Button>
-                          )}
-                          
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label>
-                                Phone Number <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                placeholder="07XXXXXXXX"
-                                value={request.phone_number}
-                                onChange={(e) => handlePhoneRequestChange(index, 'phone_number', e.target.value)}
-                                className={hasError(`phoneRequests.${index}.phone_number`) ? 'border-red-500 dark:border-red-800' : ''}
-                                disabled={isSubmitting}
-                              />
-                              {hasError(`phoneRequests.${index}.phone_number`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`phoneRequests.${index}.phone_number`)}</p>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>
-                                Phone Brand <span className="text-red-500">*</span>
-                              </Label>
-                              <select
-                                value={request.phone_brand}
-                                onChange={(e) => handlePhoneRequestChange(index, 'phone_brand', e.target.value)}
-                                className={`w-full px-3 py-2 rounded-md border ${
-                                  hasError(`phoneRequests.${index}.phone_brand`) 
-                                    ? 'border-red-500 dark:border-red-800' 
-                                    : 'border-gray-200 dark:border-gray-700'
-                                } bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:focus:ring-white`}
-                                disabled={isSubmitting}
-                              >
-                                <option value="">Select Phone Brand</option>
-                                {[
-                                  'Airtel Imagine', 'Asus', 'BlackBerry', 'Google', 'Honor',
-                                  'HTC', 'Huawei', 'iPhone', 'Infinix', 'Itel', 'Lenovo',
-                                  'LG', 'Micromax', 'Motorola', 'MTN Ikosora', 'MTN Taci',
-                                  'Nokia', 'OnePlus', 'Oppo', 'Realme', 'Samsung', 'Sony',
-                                  'Techno', 'Vivo', 'Xiaomi', 'ZTE', 'Unlisted'
-                                ].map(brand => (
-                                  <option key={brand} value={brand.toLowerCase()}>
-                                    {brand}
-                                  </option>
-                                ))}
-                              </select>
-                              {hasError(`phoneRequests.${index}.phone_brand`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`phoneRequests.${index}.phone_brand`)}</p>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>
-                                Start Period <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                type="date"
-                                value={request.start_date}
-                                onChange={(e) => handlePhoneRequestChange(index, 'start_date', e.target.value)}
-                                className={hasError(`phoneRequests.${index}.start_date`) ? 'border-red-500 dark:border-red-800' : ''}
-                                disabled={isSubmitting}
-                              />
-                              {hasError(`phoneRequests.${index}.start_date`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`phoneRequests.${index}.start_date`)}</p>
-                              )}
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>
-                                End Period <span className="text-red-500">*</span>
-                              </Label>
-                              <Input
-                                type="date"
-                                value={request.end_date}
-                                onChange={(e) => handlePhoneRequestChange(index, 'end_date', e.target.value)}
-                                className={hasError(`phoneRequests.${index}.end_date`) ? 'border-red-500 dark:border-red-800' : ''}
-                                disabled={isSubmitting}
-                              />
-                              {hasError(`phoneRequests.${index}.end_date`) && (
-                                <p className="text-sm text-red-500">{getErrorMessage(`phoneRequests.${index}.end_date`)}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={addPhoneRequest}
-                        disabled={isSubmitting}
-                        className="w-full mt-2"
+                {/* Right Panel - Phone Requests */}
+                <div className="lg:col-span-8 space-y-6">
+                  {/* Phone Requests Section */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6"
+                  >
+                    <h2 className="text-xl font-semibold mb-4 dark:text-white">
+                      Phone Information
+                    </h2>
+                    
+                    {phoneRequests.map((request, index) => (
+                      <div 
+                        key={index} 
+                        className="mb-4 border border-gray-200 dark:border-gray-700 rounded-xl p-4 relative"
                       >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Another Phone
-                      </Button>
-                    </div>
+                        {phoneRequests.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePhoneRequest(index)}
+                            className="absolute top-2 right-2 p-1 rounded-full 
+                                       hover:bg-gray-100 dark:hover:bg-gray-700 
+                                       transition-colors text-gray-500 dark:text-gray-400"
+                          >
+                            <XCircle className="w-5 h-5" />
+                          </button>
+                        )}
 
-                    {/* Additional Details Section */}
-                    <div className="space-y-2">
-                      <Label htmlFor="details">Additional Details</Label>
-                      <Textarea
-                        id="details"
-                        name="details"
-                        rows={4}
-                        placeholder="Any additional information that might help with your request"
-                        value={formData.details || ''}
-                        onChange={handleChange}
-                        disabled={isSubmitting}
-                      />
-                    </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Phone Number Input */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Phone Number <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              value={request.phone_number}
+                              onChange={(e) => handlePhoneRequestChange(index, 'phone_number', e.target.value)}
+                              placeholder="07XXXXXXXX"
+                              className={`w-full px-4 py-2 rounded-lg border 
+                                        ${formErrors[`phoneRequests.${index}.phone_number`] 
+                                          ? 'border-red-500' 
+                                          : 'border-gray-200 dark:border-gray-600'}
+                                        bg-white dark:bg-gray-800 dark:text-white
+                                        focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent`}
+                            />
+                            {formErrors[`phoneRequests.${index}.phone_number`] && (
+                              <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                                {formErrors[`phoneRequests.${index}.phone_number`]}
+                              </p>
+                            )}
+                          </div>
 
-                    {/* Important Note */}
-                    <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 text-blue-800 dark:text-blue-300">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <h3 className="text-sm font-medium">Important Note</h3>
-                          <div className="mt-2 text-sm">
-                            <p>
-                              Please ensure that the customer is requesting serial numbers 
-                              for phone numbers registered under their name. Whenever possible, verify that the provided 
-                              phone numbers are registered to the customer's identity. This is required for security 
-                              purposes and to protect our customers' privacy.
-                            </p>
+                          {/* Phone Brand Input */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Phone Brand <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={request.phone_brand}
+                              onChange={(e) => handlePhoneRequestChange(index, 'phone_brand', e.target.value)}
+                              className={`w-full px4 py-2 rounded-lg border 
+                                          ${formErrors[`phoneRequests.${index}.phone_brand`] 
+                                            ? 'border-red-500' 
+                                            : 'border-gray-200 dark:border-gray-600'}
+                                          bg-white dark:bg-gray-800 dark:text-white
+                                          focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent`}
+                            >
+                              <option value="">Select Phone Brand</option>
+                              {[
+                                'Airtel Imagine', 'Asus', 'BlackBerry', 'Google', 'Honor',
+                                'HTC', 'Huawei', 'iPhone', 'Infinix', 'Itel', 'Lenovo',
+                                'LG', 'Micromax', 'Motorola', 'MTN Ikosora', 'MTN Taci',
+                                'Nokia', 'OnePlus', 'Oppo', 'Realme', 'Samsung', 'Sony',
+                                'Techno', 'Vivo', 'Xiaomi', 'ZTE', 'Unlisted'
+                              ].map(brand => (
+                                <option key={brand} value={brand.toLowerCase()}>
+                                  {brand}
+                                </option>
+                              ))}
+                            </select>
+                            {formErrors[`phoneRequests.${index}.phone_brand`] && (
+                              <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                                {formErrors[`phoneRequests.${index}.phone_brand`]}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Start Date Input */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Start Period <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={request.start_date}
+                              onChange={(e) => handlePhoneRequestChange(index, 'start_date', e.target.value)}
+                              className={`w-full px-4 py-2 rounded-lg border 
+                                        ${formErrors[`phoneRequests.${index}.start_date`] 
+                                          ? 'border-red-500' 
+                                          : 'border-gray-200 dark:border-gray-600'}
+                                        bg-white dark:bg-gray-800 dark:text-white
+                                        focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent`}
+                            />
+                            {formErrors[`phoneRequests.${index}.start_date`] && (
+                              <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                                {formErrors[`phoneRequests.${index}.start_date`]}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* End Date Input */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              End Period <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={request.end_date}
+                              onChange={(e) => handlePhoneRequestChange(index, 'end_date', e.target.value)}
+                              className={`w-full px-4 py-2 rounded-lg border 
+                                        ${formErrors[`phoneRequests.${index}.end_date`] 
+                                          ? 'border-red-500' 
+                                          : 'border-gray-200 dark:border-gray-600'}
+                                        bg-white dark:bg-gray-800 dark:text-white
+                                        focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent`}
+                            />
+                            {formErrors[`phoneRequests.${index}.end_date`] && (
+                              <p className="mt-1 text-sm text-red-500 dark:text-red-400">
+                                {formErrors[`phoneRequests.${index}.end_date`]}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
+                    ))}
+
+                    {/* Add Another Phone Button */}
+                    <button
+                      type="button"
+                      onClick={addPhoneRequest}
+                      className="w-full py-3 border border-dashed border-gray-300 dark:border-gray-600 rounded-xl
+                                 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700
+                                 transition-colors flex items-center justify-center"
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      <span>Add Another Phone</span>
+                    </button>
+                  </motion.div>
+
+                  {/* Additional Details Section */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6"
+                  >
+                    <h2 className="text-xl font-semibold mb-4 dark:text-white">
+                      Additional Details
+                    </h2>
+                    <textarea
+                      name="details"
+                      value={formData.details}
+                      onChange={handleChange}
+                      rows={4}
+                      placeholder="Any additional information that might help with your request"
+                      className={`w-full px-4 py-2 rounded-lg border 
+                                 ${formErrors.details ? 'border-red-500' : 'border-gray-200 dark:border-gray-600'}
+                                 bg-white dark:bg-gray-800 dark:text-white
+                                 focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent
+                                 min-h-[100px]`}
+                    />
+                  </motion.div>
+
+                  {/* Important Note */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 text-blue-800 dark:text-blue-300"
+                  >
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium">Important Note</h3>
+                        <div className="mt-2 text-sm">
+                          <p>
+                            Please ensure that the customer is requesting serial numbers 
+                            for phone numbers registered under their name. Whenever possible, verify that the provided 
+                            phone numbers are registered to the customer's identity. This is required for security 
+                            purposes and to protect our customers' privacy.
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </form>
-              </CardContent>
-              
-              <CardFooter className="flex justify-end space-x-4">
-                <Button
-                  type="button"
-                  variant="outline"
+                  </motion.div>
+
+                  {/* Form Action Buttons */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex justify-end space-x-4 pt-4"
+                  >
+                    {/* Cancel Button */}
+                    <button
+                      type="button"
+                      onClick={onBack}
+                      disabled={isLoading}
+                      className="px-6 py-2 rounded-lg border border-gray-200 dark:border-gray-700
+                               text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700
+                               transition-colors duration-200
+                               disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Cancel
+                    </button>
+
+                    {/* Submit Button with Loading State */}
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="px-6 py-2 rounded-lg bg-black dark:bg-white 
+                               text-white dark:text-black
+                               hover:bg-gray-800 dark:hover:bg-gray-200 
+                               transition-colors duration-200
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               flex items-center space-x-2"
+                    >
+                      {isLoading ? (
+                        <>
+                          <motion.div
+                            className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Smartphone className="w-4 h-4 mr-2" />
+                          <span>Submit Request</span>
+                        </>
+                      )}
+                    </button>
+                  </motion.div>
+                </div>
+              </form>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="text-center py-16"
+            >
+              <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-4">
+                <Smartphone className="w-8 h-8 text-green-600 dark:text-green-300" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Request Submitted Successfully!
+              </h2>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">
+                Your serial number request has been submitted with reference number: 
+                <span className="font-medium text-gray-900 dark:text-white ml-2">
+                  {referenceNumber}
+                </span>
+              </p>
+              <div className="space-x-4">
+                <button
                   onClick={onBack}
-                  disabled={isSubmitting}
+                  className="px-6 py-2 rounded-lg border border-gray-200 dark:border-gray-700
+                           text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700
+                           transition-colors duration-200"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  form="serial-number-form"
-                  disabled={isSubmitting}
-                  className="bg-[#0A2647] text-white hover:bg-[#0A2647]/90 dark:bg-white dark:text-[#0A2647] dark:hover:bg-white/90"
+                  Back to Services
+                </button>
+                <button
+                  onClick={handleNewRequest}
+                  className="px-6 py-2 rounded-lg bg-black dark:bg-white 
+                           text-white dark:text-black
+                           hover:bg-gray-800 dark:hover:bg-gray-200 
+                           transition-colors duration-200"
                 >
-                  {isSubmitting ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Smartphone className="h-4 w-4 mr-2" />
-                  )}
-                  Submit Request
-                </Button>
-              </CardFooter>
-            </Card>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="text-center py-16"
-          >
-            <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-300" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Request Submitted Successfully!</h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">
-              Your serial number request has been submitted with reference number: <span className="font-medium text-gray-900 dark:text-white">{referenceNumber}</span>
-            </p>
-            <div className="space-x-4">
-              <Button
-                variant="outline"
-                onClick={onBack}
-                className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600"
-              >
-                Back to Services
-              </Button>
-              <Button
-                onClick={handleNewRequest}
-                className="bg-[#0A2647] text-white hover:bg-[#0A2647]/90 dark:bg-white dark:text-[#0A2647] dark:hover:bg-white/90"
-              >
-                New Request
-              </Button>
-            </div>
-          </motion.div>
-        )}
+                  New Request
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+        <ToastViewport />
       </div>
-    </div>
+    </ToastProvider>
   );
 };
 

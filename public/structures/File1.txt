@@ -1,0 +1,91 @@
+npm install @radix-ui/react-switch clsx tailwind-merge
+npm install @radix-ui/react-scroll-area
+
+
+# API Service Modular Structure
+
+Here's a recommended structure for splitting your API service into modular components:
+
+```
+/src
+├── config/
+│   ├── api-client.js         # Base API client configuration
+│   ├── api-service.js        # Main API service that imports modules
+│   └── endpoints.js          # API endpoint configuration
+│
+├── services/
+│   ├── auth-service.js       # Authentication related endpoints
+│   ├── user-service.js       # User management related endpoints
+│   ├── background-service.js # Background checks related endpoints
+│   ├── stakeholder-service.js # Stakeholder requests endpoints
+│   ├── guard-service.js      # Guard shift reports endpoints
+│   ├── security-service.js   # Security components endpoints
+│   ├── queue-service.js      # Queue management endpoints
+│   ├── notification-service.js # Notification related endpoints
+│   └── task-service.js       # Task management endpoints
+│
+└── utils/
+    ├── cache-utils.js        # Request caching utilities
+    └── queue-utils.js        # Request queue utilities
+```
+
+This structure separates concerns while keeping related functionality grouped together.
+
+
+
+
+/server
+├── server.js                  # Main entry point
+├── db.js                      # Database connection
+├── db-init.js                 # Database initialization
+├── config/
+│   ├── env.js                 # Environment variables handling
+│   └── constants.js           # Server constants
+│
+├── middleware/
+│   ├── auth.js                # Authentication middleware
+│   ├── error-handlers.js      # Error handling middleware
+│   └── validation.js          # Request validation middleware
+│
+├── routes/
+│   ├── auth-routes.js         # Authentication routes
+│   ├── user-routes.js         # User management routes
+│   ├── background-routes.js   # Background check routes
+│   ├── stakeholder-routes.js  # Stakeholder request routes
+│   ├── guard-routes.js        # Guard shift report routes
+│   ├── security-routes.js     # Security services routes
+│   ├── queue-routes.js        # Queue management routes
+│   ├── notification-routes.js # Notification routes
+│   └── task-routes.js         # Task management routes
+│
+├── controllers/
+│   ├── auth-controller.js     # Authentication controllers
+│   ├── user-controller.js     # User management controllers
+│   ├── background-controller.js # Background check controllers
+│   └── ...                    # Controllers for other routes
+│
+├── models/
+│   ├── user-model.js          # User data models/operations
+│   ├── background-model.js    # Background check models/operations
+│   └── ...                    # Models for other entities
+│
+└── utils/
+    ├── logger.js              # Logging utility
+    └── helpers.js             # Helper functions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    UPDATE users SET password_expires_at = NOW() + INTERVAL '3 months';

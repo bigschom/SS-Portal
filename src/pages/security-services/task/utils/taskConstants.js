@@ -14,8 +14,6 @@ import {
     NEW: 'new',
     IN_PROGRESS: 'in_progress',
     COMPLETED: 'completed',
-    RESOLVED: 'resolved',
-    REOPENED: 'reopened',
     PENDING_INVESTIGATION: 'pending_investigation',
     UNABLE_TO_HANDLE: 'unable_to_handle',
     SENT_BACK: 'sent_back'
@@ -69,89 +67,33 @@ import {
       text: 'text-amber-700 dark:text-amber-300',
       border: 'border-amber-500',
       iconColor: 'text-amber-600'
-    },
-    [REQUEST_STATUS.RESOLVED]: {
-      icon: CheckCircle2,
-      label: 'Resolved',
-      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
-      text: 'text-emerald-700 dark:text-emerald-300',
-      border: 'border-emerald-500',
-      iconColor: 'text-emerald-600'
-    },
-    [REQUEST_STATUS.REOPENED]: {
-      icon: FileEdit,
-      label: 'Reopened',
-      bg: 'bg-orange-50 dark:bg-orange-900/20',
-      text: 'text-orange-700 dark:text-orange-300',
-      border: 'border-orange-500',
-      iconColor: 'text-orange-600'
     }
   };
   
-  export const STATUS_MESSAGES = {
-    [REQUEST_STATUS.NEW]: 'New Request',
-    [REQUEST_STATUS.IN_PROGRESS]: 'In Progress',
-    [REQUEST_STATUS.COMPLETED]: 'Completed',
-    [REQUEST_STATUS.RESOLVED]: 'Resolved',
-    [REQUEST_STATUS.REOPENED]: 'Reopened',
-    [REQUEST_STATUS.PENDING_INVESTIGATION]: 'Pending Investigation',
-    [REQUEST_STATUS.UNABLE_TO_HANDLE]: 'Unable to Handle',
-    [REQUEST_STATUS.SENT_BACK]: 'Sent Back for Correction'
-  };
-  
-  export const REMINDER_INTERVALS = {
-    INITIAL_REMINDER: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-    ESCALATION_THRESHOLD: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
-  };
-  
-  export const TASK_EVENTS = {
-    STATUS_CHANGE: 'status_change',
-    COMMENT_ADDED: 'comment_added',
-    REMINDER_DUE: 'reminder_due',
-    ESCALATION_NEEDED: 'escalation_needed'
-  };
-  
-  // Service types
   export const SERVICE_TYPES = {
     REQUEST_SERIAL_NUMBER: 'request_serial_number',
     CHECK_STOLEN_PHONE: 'check_stolen_phone',
     CALL_HISTORY: 'call_history',
     UNBLOCK_CALL: 'unblock_call',
-    MOMO_TRANSACTION: 'momo_transaction',
     UNBLOCK_MOMO: 'unblock_momo',
     MONEY_REFUND: 'money_refund',
-    AGENT_COMMISSION: 'agent_commission',
-    BACKOFFICE_APPOINTMENT: 'backoffice_appointment',
-    INTERNET_ISSUE: 'internet_issue',
-    REQUEST_FOLLOWUP: 'request_followup'
+    MOMO_TRANSACTION: 'momo_transaction',
+    BACKOFFICE_APPOINTMENT: 'backoffice_appointment'
   };
   
-  // Service categories
-  export const SERVICE_CATEGORIES = {
-    PHONE: 'phone',
-    MOMO: 'momo',
-    OTHER: 'other'
+  export const SERVICE_LABELS = {
+    [SERVICE_TYPES.REQUEST_SERIAL_NUMBER]: 'Serial Number Request',
+    [SERVICE_TYPES.CHECK_STOLEN_PHONE]: 'Stolen Phone Check',
+    [SERVICE_TYPES.CALL_HISTORY]: 'Call History Request',
+    [SERVICE_TYPES.UNBLOCK_CALL]: 'Unblock Call Request',
+    [SERVICE_TYPES.UNBLOCK_MOMO]: 'Unblock MoMo Request',
+    [SERVICE_TYPES.MONEY_REFUND]: 'Money Refund Request',
+    [SERVICE_TYPES.MOMO_TRANSACTION]: 'MoMo Transaction History',
+    [SERVICE_TYPES.BACKOFFICE_APPOINTMENT]: 'Backoffice Appointment'
   };
   
-  // Map service types to categories
-  export const SERVICE_TYPE_CATEGORIES = {
-    [SERVICE_TYPES.REQUEST_SERIAL_NUMBER]: SERVICE_CATEGORIES.PHONE,
-    [SERVICE_TYPES.CHECK_STOLEN_PHONE]: SERVICE_CATEGORIES.PHONE,
-    [SERVICE_TYPES.CALL_HISTORY]: SERVICE_CATEGORIES.PHONE,
-    [SERVICE_TYPES.UNBLOCK_CALL]: SERVICE_CATEGORIES.PHONE,
-    [SERVICE_TYPES.MOMO_TRANSACTION]: SERVICE_CATEGORIES.MOMO,
-    [SERVICE_TYPES.UNBLOCK_MOMO]: SERVICE_CATEGORIES.MOMO,
-    [SERVICE_TYPES.MONEY_REFUND]: SERVICE_CATEGORIES.MOMO,
-    [SERVICE_TYPES.AGENT_COMMISSION]: SERVICE_CATEGORIES.OTHER,
-    [SERVICE_TYPES.BACKOFFICE_APPOINTMENT]: SERVICE_CATEGORIES.OTHER,
-    [SERVICE_TYPES.INTERNET_ISSUE]: SERVICE_CATEGORIES.OTHER,
-    [SERVICE_TYPES.REQUEST_FOLLOWUP]: SERVICE_CATEGORIES.OTHER
-  };
-  
-  // Priority levels
-  export const PRIORITY = {
-    LOW: 'low',
-    MEDIUM: 'medium',
-    HIGH: 'high',
-    URGENT: 'urgent'
+  export const TASK_EVENTS = {
+    STATUS_CHANGE: 'status_change',
+    COMMENT_ADDED: 'comment_added',
+    REMINDER_DUE: 'reminder_due'
   };
