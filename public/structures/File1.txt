@@ -89,3 +89,95 @@ This structure separates concerns while keeping related functionality grouped to
 
 
     UPDATE users SET password_expires_at = NOW() + INTERVAL '3 months';
+
+
+
+
+
+
+
+    npm install @radix-ui/react-separator
+    npm install @radix-ui/react-avatar clsx tailwind-merge
+
+
+
+    npm install jspdf-autotable
+
+
+
+npm install @radix-ui/react-tooltip
+
+
+
+ALTER TABLE request_comments ADD COLUMN is_backoffice_comment BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE request_comments ADD COLUMN is_response BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE request_comments ADD COLUMN is_system BOOLEAN DEFAULT FALSE;
+
+
+-- First, check if the table exists
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'stolen_phone_requests') THEN
+        -- Check if service_request_id column exists
+        IF NOT EXISTS (SELECT FROM information_schema.columns 
+                      WHERE table_name = 'stolen_phone_requests' AND column_name = 'service_request_id') THEN
+            
+            -- Check if there's a request_id column that needs to be renamed
+            IF EXISTS (SELECT FROM information_schema.columns 
+                      WHERE table_name = 'stolen_phone_requests' AND column_name = 'request_id') THEN
+                
+                -- Rename request_id to service_request_id
+                ALTER TABLE stolen_phone_requests RENAME COLUMN request_id TO service_request_id;
+                
+            ELSE
+                -- Add service_request_id column if it doesn't exist at all
+                ALTER TABLE stolen_phone_requests 
+                ADD COLUMN service_request_id INTEGER NOT NULL REFERENCES service_requests(id) ON DELETE CASCADE;
+                
+                -- Create index for the new column
+                CREATE INDEX idx_stolen_phone_requests_service_request_id 
+                ON stolen_phone_requests(service_request_id);
+            END IF;
+        END IF;
+    ELSE
+        -- Create the table if it doesn't exist
+        CREATE TABLE stolen_phone_requests (
+            id SERIAL PRIMARY KEY,
+            service_request_id INTEGER NOT NULL REFERENCES service_requests(id) ON DELETE CASCADE,
+            imei_number VARCHAR(20) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        
+        -- Create indexes
+        CREATE INDEX idx_stolen_phone_requests_service_request_id 
+        ON stolen_phone_requests(service_request_id);
+        CREATE INDEX idx_stolen_phone_requests_imei_number 
+        ON stolen_phone_requests(imei_number);
+    END IF;
+END $$;
+
+
+
+-- Add missing columns to request_comments table
+DO $$ 
+BEGIN
+    -- Add is_system column if it doesn't exist
+    IF NOT EXISTS (SELECT FROM information_schema.columns 
+                  WHERE table_name = 'request_comments' AND column_name = 'is_system') THEN
+        ALTER TABLE request_comments ADD COLUMN is_system BOOLEAN DEFAULT FALSE;
+    END IF;
+    
+    -- Add is_response column if it doesn't exist
+    IF NOT EXISTS (SELECT FROM information_schema.columns 
+                  WHERE table_name = 'request_comments' AND column_name = 'is_response') THEN
+        ALTER TABLE request_comments ADD COLUMN is_response BOOLEAN DEFAULT FALSE;
+    END IF;
+    
+    -- Add is_backoffice_comment column if it doesn't exist
+    IF NOT EXISTS (SELECT FROM information_schema.columns 
+                  WHERE table_name = 'request_comments' AND column_name = 'is_backoffice_comment') THEN
+        ALTER TABLE request_comments ADD COLUMN is_backoffice_comment BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;

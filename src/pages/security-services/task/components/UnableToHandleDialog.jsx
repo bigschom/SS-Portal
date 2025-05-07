@@ -10,24 +10,24 @@ import {
   AlertDialogTitle,
 } from "../../../../components/ui/alert-dialog";
 import { Textarea } from '../../../../components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useTaskContext } from '../context/TaskContext';
 import taskService from '../../../../services/task-service';
 import { REQUEST_STATUS } from '../utils/constants';
 import { showNotification } from '../utils/notifications';
 
 /**
- * Dialog for sending back a request to the requestor
+ * Dialog for marking a request as unable to handle
  */
-const SendBackDialog = ({ 
+const UnableToHandleDialog = ({ 
   open, 
   onOpenChange 
 }) => {
   const { 
     user, 
     selectedRequest,
-    sendBackReason, 
-    setSendBackReason,
+    commentText, 
+    setCommentText,
     setRequestLoading,
     setError,
     setSuccess,
@@ -37,55 +37,54 @@ const SendBackDialog = ({
   } = useTaskContext();
   
   // Handle submit
-  const handleSendBackToRequestor = async () => {
-    if (!selectedRequest || !user || !sendBackReason.trim()) return;
+  const handleMarkAsUnhandled = async () => {
+    if (!selectedRequest || !user || !commentText.trim()) return;
 
     setRequestLoading(selectedRequest.id, true);
     try {
-      // Update request status and store current assignee
+      // Update request status
       await taskService.updateRequestStatus(
         selectedRequest.id,
-        REQUEST_STATUS.SENT_BACK,
+        REQUEST_STATUS.UNABLE_TO_HANDLE,
         user.id,
-        `Request sent back by ${user.fullname}. Reason: ${sendBackReason}`,
+        `Request marked as unable to handle by ${user.fullname}`,
         null // Set assigned_to to null
       );
 
-      // Add send back reason as a comment
+      // Add comment explaining why it can't be handled
       await taskService.addComment(
         selectedRequest.id,
         user.id,
-        `SEND BACK REASON: ${sendBackReason}`,
+        `UNABLE TO HANDLE: ${commentText}`,
         true, // is system message
         false, // not a response
-        true // is a send back reason
+        false // not a send back reason
       );
-      
-      // Show notification if enabled
+
       if (notificationsEnabled) {
         showNotification(
-          'Request Sent Back', 
-          `Request ${selectedRequest.reference_number} was sent back for corrections`,
-          `sent-back-${selectedRequest.reference_number}`
+          'Request Unable to Handle', 
+          `Request ${selectedRequest.reference_number} was marked as unable to handle`,
+          `unhandled-${selectedRequest.reference_number}`
         );
         
         // Notify the creator
         if (selectedRequest.created_by && selectedRequest.created_by.id !== user.id) {
           showNotification(
-            'Request Sent Back', 
-            `Your request ${selectedRequest.reference_number} was sent back for corrections`,
-            `sent-back-to-creator-${selectedRequest.reference_number}`
+            'Request Unable to Handle', 
+            `Your request ${selectedRequest.reference_number} was marked as unable to handle`,
+            `unhandled-to-creator-${selectedRequest.reference_number}`
           );
         }
       }
 
       await fetchRequests();
       onOpenChange(false);
-      clearDialogStates();
-      setSuccess('Request sent back for correction');
+      clearDialogStates(); 
+      setSuccess('Request marked as unable to handle');
     } catch (err) {
-      console.error('Error in handleSendBackToRequestor:', err);
-      setError('Failed to send request back. Please try again.');
+      console.error('Error in handleMarkAsUnhandled:', err);
+      setError('Failed to mark request as unhandled. Please try again.');
     } finally {
       setRequestLoading(selectedRequest?.id, false);
     }
@@ -95,18 +94,21 @@ const SendBackDialog = ({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Send Back Request</AlertDialogTitle>
+          <AlertDialogTitle className="flex items-center">
+            <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+            Unable to Handle Request
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Please provide a reason for sending this request back to the requestor.
-            This reason will be visible to the requestor.
+            Please explain why you are unable to handle this request.
+            This information will be recorded and visible to administrators.
           </AlertDialogDescription>
         </AlertDialogHeader>
         
         <div className="py-4">
           <Textarea
-            value={sendBackReason}
-            onChange={(e) => setSendBackReason(e.target.value)}
-            placeholder="Enter reason for sending back..."
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            placeholder="Explain why this request cannot be handled..."
             className="min-h-[100px]"
           />
         </div>
@@ -119,14 +121,14 @@ const SendBackDialog = ({
           </AlertDialogCancel>
           
           <AlertDialogAction
-            onClick={handleSendBackToRequestor}
-            disabled={!sendBackReason.trim() || (selectedRequest && selectedRequest.id ? selectedRequest.isActionLoading : false)}
-            className="bg-orange-600 hover:bg-orange-700 text-white"
+            onClick={handleMarkAsUnhandled}
+            disabled={!commentText.trim() || (selectedRequest && selectedRequest.id ? selectedRequest.isActionLoading : false)}
+            className="bg-red-600 hover:bg-red-700 text-white"
           >
             {selectedRequest && selectedRequest.id && selectedRequest.isActionLoading ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
             ) : null}
-            Send Back
+            Mark as Unable to Handle
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -134,4 +136,4 @@ const SendBackDialog = ({
   );
 };
 
-export default SendBackDialog;
+export default UnableToHandleDialog;

@@ -13,6 +13,7 @@ import queueService from '../services/queue-service.js';
 import notificationService from '../services/notification-service.js';
 import taskService from '../services/task-service.js';
 import activityLogService from '../services/activity-log-service.js';
+import internshipService from '../services/internship-service.js';
 
 // Export all services as a single object
 export default {
@@ -28,6 +29,7 @@ export default {
   tasks: taskService,
   activityLog: activityLogService,
   apiClient, 
+  internships: internshipService,
   
   // Utility methods that might be useful across services
   utils: {
@@ -37,5 +39,6 @@ export default {
       securityService.invalidateCache();
       console.log('All service caches cleared');
     }
-  }
-};
+  },
+
+  };

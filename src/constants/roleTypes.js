@@ -4,7 +4,6 @@ export const ROLE_TYPES = [
     'Consultant', 
     'Contractor',
     'Expert',
-    'Internship',
     'Apprentice'
   ];
   

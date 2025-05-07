@@ -18,3 +18,24 @@ PG_SSL=false
 
 # JWT Secret
 JWT_SECRET=d5938810853de56b5a9028badc91cc1c7bd6303a959d8b2bd63cfea4e46451a3edc1782cd5a79eff26614f3d8b70372ee48f7575f3d8c73f42c2f58a38224c10
+
+
+
+
+# App Configuration (Frontend)
+VITE_APP_NAME=Security & Safety Portal
+VITE_SESSION_TIMEOUT_MINUTES=5
+VITE_API_URL=http://10.150.22.145:5000/api
+
+# Server Configuration (Backend)
+PORT=5000
+FRONTEND_URL=http://10.150.22.145:3000
+NODE_ENV=development
+
+# PostgreSQL Connection
+PG_HOST=10.150.22.145
+PG_PORT=5432
+PG_DATABASE=ss_portal
+PG_USER=bigirig
+PG_PASSWORD=0Lr!7053
+PG_SSL=false

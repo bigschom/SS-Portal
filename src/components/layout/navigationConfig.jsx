@@ -18,7 +18,11 @@ import {
   List,
   BookOpen,
   CheckSquare,
-  Trash2
+  Trash2,
+  SquareGantt,
+  PlusCircle,
+  XCircle,
+  Database
 } from 'lucide-react';
 
 export const roleBasedNavigation = {
@@ -51,16 +55,6 @@ export const roleBasedNavigation = {
           icon: FileCheck
         },
         {
-          name: 'Intership Overview',
-          path: '/internshipoverview',
-          icon: Briefcase
-        },
-        {
-          name: 'All Internship',
-          path: '/all-internship-background-checks',
-          icon: List
-        },
-        {
           name: 'Delete Requests',
           path: '/delete-background-checks',
           icon: Trash2
@@ -72,6 +66,34 @@ export const roleBasedNavigation = {
         },
       ]
     },
+
+    {
+      name: 'Intership Checks',
+      icon: SquareGantt,
+      children: [
+        {
+          name: 'Intership Overview',
+          path: '/internship-overview',
+          icon: ClipboardList
+        },
+        {
+          name: 'New Request',
+          path: '/new-internship-request',
+          icon: PlusCircle
+        },
+        {
+          name: 'Delete Requests',
+          path: '/delete-internship-checks',
+          icon: XCircle
+        },
+        {
+          name: 'All Internship',
+          path: '/all-Internship-checks',
+          icon: Database
+        },
+      ]
+    },
+
     {
       name: 'Stake Holder request',
       icon: Users,
@@ -99,8 +121,18 @@ export const roleBasedNavigation = {
       icon: Lock,
       children: [
         {
-          name: 'Service Queue',
-          path: '/security-services/control-panel/queue-management',
+          name: 'Service Dashboard',
+          path: '/security-services/dashboard-page',
+          icon: FileCheck
+        },
+        {
+          name: 'Service Management',
+          path: '/security-services/service-management',
+          icon: FileCheck
+        },
+        {
+          name: 'Service Queue Management',
+          path: '/security-services/queue-management',
           icon: FileCheck
         },
         {
@@ -129,7 +161,8 @@ export const roleBasedNavigation = {
         { name: 'Internship Report', path: '/internship-report', icon: FileText },
         { name: 'Guard Shift Daily Report', path: '/guard-shift-report', icon: FileText },
         { name: 'Guard Shift Analytics Report', path: '/guard-shift-report-1', icon: FileText },
-        {name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText }
+        {name: 'Equipment Movement Report', path: '/equipment-movement-report', icon: FileText },
+        {name: 'Security Services Report', path: '/security-services/security-services-report', icon: FileText }
       ]
     },
     {
@@ -216,8 +249,8 @@ export const roleBasedNavigation = {
     },
     {
       name: 'Intership Overview',
-      path: '/internshipoverview',
-      icon: Briefcase
+      path: '/internship-overview',
+      icon: ClipboardList
     },
     { name: 'Equipment Movement Log book', 
       path: '/equipment-movement', 

@@ -1,94 +1,80 @@
-// src/pages/security-services/task/components/RequestCard.jsx
 import React from 'react';
-import { motion } from 'framer-motion';
-import { Clock, User, Phone, Calendar, FileText } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Card, CardContent } from '../../../../components/ui/card';
+import { MessageSquare, Calendar, User } from 'lucide-react';
+import { format } from 'date-fns';
+import { STATUS_CONFIG } from '../utils/constants';
+import { cn } from "../../../../lib/utils";
 import StatusBadge from './StatusBadge';
-import { SERVICE_LABELS } from '../utils/taskConstants';
 
-const RequestCard = ({ 
-  request, 
-  onClick, 
-  isLoading, 
-  actionButton = null, 
-  highlighted = false
-}) => {
-  const {
-    reference_number,
-    service_type,
-    status,
-    created_at,
-    full_names,
-    primary_contact,
-    updated_at
-  } = request;
-
-  const formattedDate = new Date(created_at).toLocaleDateString();
-  const timeAgo = formatDistanceToNow(new Date(updated_at || created_at), { addSuffix: true });
-  const serviceLabel = SERVICE_LABELS[service_type] || service_type;
-
+/**
+ * Card component for displaying a service request
+ */
+const RequestCard = ({ request, onClick, loading = false }) => {
+  if (!request) return null;
+  
+  const isCompleted = request.status === 'completed';
+  const isAssigned = request.assigned_to && request.status !== 'new';
+  const config = STATUS_CONFIG[request.status] || STATUS_CONFIG.new;
+  
   return (
-    <motion.div
-      whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-sm 
-                 border-l-4 ${highlighted ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'} 
-                 overflow-hidden cursor-pointer transition-all hover:shadow-md`}
-      onClick={() => !isLoading && onClick && onClick(request)}
+    <Card 
+      className={cn(
+        "cursor-pointer hover:shadow-lg transition-all duration-200",
+        `border-l-4 ${config.border}`,
+        "dark:bg-gray-800/50",
+        isCompleted && "bg-green-50"
+      )}
+      onClick={() => onClick(request)}
     >
-      {/* Card Body */}
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-3">
+      <CardContent className="p-6">
+        {/* Header with Service Type and Status */}
+        <div className="flex justify-between items-start mb-4">
           <div>
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-              {reference_number}
+            <h3 className="text-lg font-medium dark:text-gray-100">
+              {request.service_type.replace(/_/g, ' ').toUpperCase()}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {serviceLabel}
+            <p className="text-sm text-muted-foreground">
+              {request.reference_number}
             </p>
           </div>
-          <StatusBadge status={status} />
+          <StatusBadge status={request.status} />
         </div>
-
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center text-gray-700 dark:text-gray-300">
-            <User className="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500" />
-            <span className="truncate">{full_names}</span>
+        
+        {/* Customer Information */}
+        <div className="space-y-2">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium dark:text-gray-300">
+              {request.full_names}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {request.primary_contact}
+            </span>
           </div>
           
-          <div className="flex items-center text-gray-700 dark:text-gray-300">
-            <Phone className="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500" />
-            <span>{primary_contact}</span>
-          </div>
+          {/* Assignment Information */}
+          {isAssigned && (
+            <div className="mt-2 flex items-center text-sm text-muted-foreground">
+              <User className="h-4 w-4 mr-1" />
+              <span>Assigned to: {request.assigned_to.fullname}</span>
+            </div>
+          )}
           
-          <div className="flex items-center text-gray-700 dark:text-gray-300">
-            <Calendar className="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500" />
-            <span>{formattedDate}</span>
+          {/* Meta Information */}
+          <div className="flex justify-between items-center pt-2 mt-2 border-t dark:border-gray-700">
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span>
+                {format(new Date(request.created_at), 'MMM d, yyyy h:mm a')}
+              </span>
+            </div>
+            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
+              <MessageSquare className="h-4 w-4" />
+              <span>{request.request_comments?.length || 0}</span>
+            </div>
           </div>
-          
-          <div className="flex items-center text-gray-700 dark:text-gray-300">
-            <Clock className="w-4 h-4 mr-2 text-gray-400 dark:text-gray-500" />
-            <span className="text-xs">{timeAgo}</span>
-          </div>
         </div>
-      </div>
-
-      {/* Action Button */}
-      {actionButton && (
-        <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700">
-          {actionButton}
-        </div>
-      )}
-
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      )}
-    </motion.div>
+      </CardContent>
+    </Card>
   );
 };
 

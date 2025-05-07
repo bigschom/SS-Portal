@@ -21,6 +21,7 @@ import securityRoutes from './routes/security-routes.js';
 import queueRoutes from './routes/queue-routes.js';
 import notificationRoutes from './routes/notification-routes.js';
 import taskRoutes from './routes/task-routes.js';
+import internshipRoutes from './routes/internship-routes.js';
 
 // Import scheduled tasks
 import { setupScheduledTasks } from './utils/scheduled-tasks.js';
@@ -91,6 +92,7 @@ app.use('/api/security-services', securityRoutes);
 app.use('/api/queue', queueRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/internships', internshipRoutes);
 
 // Add a simple test route
 app.get('/api/test', (req, res) => {

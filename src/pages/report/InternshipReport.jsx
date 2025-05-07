@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import "react-datepicker/dist/react-datepicker.css"
@@ -10,14 +10,14 @@ import {
   Clock,
   Building2,
   Loader2,
-  AlertCircle,
+  BadgeCheck,
   BarChart2,
   PieChartIcon,
   Calendar
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../../components/ui/card'
-import { useAuth } from '../../hooks/useAuth';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card'
+import { useAuth } from '../../hooks/useAuth'
 import apiService from '../../config/api-service'
 import {
   PieChart,
@@ -30,31 +30,70 @@ import {
   Bar,
   XAxis,
   YAxis,
-  CartesianGrid,
-  AreaChart,
-  Area
+  CartesianGrid
 } from 'recharts'
 import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
+import { motion, AnimatePresence } from 'framer-motion'
 
+// Toast Notification Component
+const Toast = ({ message, type = 'error', onClose }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 50 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 50 }}
+    className={`fixed bottom-4 right-4 z-50 flex items-center p-4 rounded-lg shadow-lg ${
+      type === 'success' ? 'bg-[#0A2647]' : 
+      type === 'error' ? 'bg-red-500' : 
+      type === 'warning' ? 'bg-[#0A2647]' : 'bg-[#0A2647]'
+    }`}
+  >
+    <div className="flex items-center">
+      <div className="mr-3">
+        {type === 'success' ? (
+          <div className="w-5 h-5 text-white">✓</div>
+        ) : (
+          <Loader2 className="w-5 h-5 text-white animate-spin" />
+        )}
+      </div>
+      <div className="text-white font-medium mr-6">
+        {message}
+      </div>
+      <button
+        onClick={onClose}
+        className="ml-auto bg-transparent text-white rounded-lg p-1.5 hover:bg-white/20"
+      >
+        <span className="sr-only">Close</span>
+        <Clock className="w-4 h-4" />
+      </button>
+    </div>
+  </motion.div>
+);
+
+// Constants
 const COLORS = ['#0A2647', '#144272', '#205295', '#2C74B3', '#427D9D']
 
 const InternshipReport = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
+  
+  // Loading states
   const [pageLoading, setPageLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [toast, setToast] = useState(null)
 
+  // Filter and data states
   const [filters, setFilters] = useState({
     dateRange: 'all',
     startDate: null,
     endDate: null,
     department: 'all',
-    status: 'all' // 'all', 'active', or 'expired'
+    status: 'all'
   })
 
-  // States for data
-  const [loading, setLoading] = useState(true)
+  // Data states
   const [departments, setDepartments] = useState([])
   const [stats, setStats] = useState({
     totalInternships: 0,
@@ -67,12 +106,17 @@ const InternshipReport = () => {
   const [monthlyData, setMonthlyData] = useState([])
   const [departmentDistribution, setDepartmentDistribution] = useState([])
   const [monthlyBreakdown, setMonthlyBreakdown] = useState([])
-  const [exportLoading, setExportLoading] = useState(false)
 
   // Initialize component
   useEffect(() => {
     setInitialized(true)
   }, [user])
+
+  // Show toast notification
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 5000);
+  };
 
   // Fetch data when filters change
   useEffect(() => {
@@ -86,6 +130,7 @@ const InternshipReport = () => {
         ])
       } catch (error) {
         console.error('Error initializing page:', error)
+        showToast('Failed to load internship data');
       } finally {
         setPageLoading(false)
       }
@@ -94,104 +139,102 @@ const InternshipReport = () => {
     initializePage()
   }, [initialized, filters])
 
+  // Fetch departments
   const fetchDepartments = async () => {
     try {
-      // Get departments from constants
-      const deptData = apiService.backgroundChecks.getDepartments();
+      // Get departments from constants via service
+      const deptData = apiService.internships.getDepartments();
       setDepartments(deptData || []);
     } catch (error) {
       console.error('Error fetching departments:', error)
+      showToast('Failed to load departments');
     }
   }
 
+  // Fetch and process internship data
   const fetchData = async () => {
     setLoading(true)
     try {
-      // Prepare API filters - Specifically for internships
-      const apiFilters = { 
-        role_type: 'Internship' // Only get internships
+      // Prepare API filters
+      const apiFilters = {
+        status: filters.status !== 'all' ? filters.status : null
       };
       
-      if (filters.startDate) {
-        apiFilters.startDate = format(filters.startDate, 'yyyy-MM-dd');
+      // Add debug logging
+      console.log('Current filters:', filters);
+      
+      // Validate and format dates properly
+      if (filters.startDate && filters.startDate instanceof Date && !isNaN(filters.startDate.getTime())) {
+        const formattedStartDate = format(filters.startDate, 'yyyy-MM-dd');
+        apiFilters.startDate = formattedStartDate;
+        console.log('Using start date:', formattedStartDate);
+      } else if (filters.startDate) {
+        console.error('Invalid start date:', filters.startDate);
       }
       
-      if (filters.endDate) {
-        apiFilters.endDate = format(filters.endDate, 'yyyy-MM-dd');
+      if (filters.endDate && filters.endDate instanceof Date && !isNaN(filters.endDate.getTime())) {
+        const formattedEndDate = format(filters.endDate, 'yyyy-MM-dd');
+        apiFilters.endDate = formattedEndDate;
+        console.log('Using end date:', formattedEndDate);
+      } else if (filters.endDate) {
+        console.error('Invalid end date:', filters.endDate);
       }
       
       if (filters.department !== 'all') {
-        apiFilters.department_id = filters.department;
+        apiFilters.department = filters.department;
       }
       
-      if (filters.status !== 'all') {
-        apiFilters.status = filters.status;
-      }
+      console.log('API filters being sent:', apiFilters);
       
-      // Get internships using the background checks API
-      let internships = await apiService.backgroundChecks.getAllBackgroundChecks(apiFilters);
+      // Get internships with filters
+      const internships = await apiService.internships.getAllInternships(apiFilters);
       
       if (internships.error) {
         throw new Error(internships.error);
       }
       
-      // Make sure we only have internships
-      internships = internships.filter(item => item.role_type === 'Internship');
-      
-      // Apply client-side filtering for active/expired status if needed
-      if (filters.status === 'active' || filters.status === 'expired') {
-        const currentDate = new Date();
-        internships = internships.filter(internship => {
-          const endDate = new Date(internship.date_end);
-          return filters.status === 'active' ? 
-            endDate >= currentDate : 
-            endDate < currentDate;
-        });
-      }
-      
+      // Store raw and filtered data
       setRawData(internships);
       setFilteredData(internships);
       
-      // Process internship data for stats and charts
+      // Process the data for reports
       processInternshipData(internships);
-      
-      // Process monthly data
       processMonthlyData(internships);
-      
-      // Process department distribution
       processDepartmentDistribution(internships);
-      
-      // Process monthly breakdown
       processMonthlyBreakdown(internships);
       
     } catch (error) {
-      console.error('Error fetching internship data:', error)
+      console.error('Error fetching data:', error)
+      showToast('Failed to load internship data');
     } finally {
       setLoading(false)
     }
   }
 
+  // Process internship statistics
   const processInternshipData = (data) => {
-    const currentDate = new Date()
-    const totalInternships = data.length
-    const activeInternships = data.filter(intern => new Date(intern.date_end) >= currentDate).length
-    const expiredInternships = totalInternships - activeInternships
+    const currentDate = new Date();
+    const totalInternships = data.length;
+    const activeInternships = data.filter(item => new Date(item.date_end) >= currentDate).length;
+    const expiredInternships = data.filter(item => new Date(item.date_end) < currentDate).length;
 
     setStats({
       totalInternships,
       activeInternships,
       expiredInternships
-    })
+    });
 
     const statusData = [
       { name: 'Active', value: activeInternships, percentage: totalInternships ? ((activeInternships/totalInternships) * 100).toFixed(1) : 0 },
       { name: 'Expired', value: expiredInternships, percentage: totalInternships ? ((expiredInternships/totalInternships) * 100).toFixed(1) : 0 }
-    ]
-    setStatusDistribution(statusData)
+    ];
+    
+    setStatusDistribution(statusData);
   }
-  
+
+  // Process monthly data
   const processMonthlyData = (data) => {
-    // Group data by month based on start date
+    // Group data by month
     const monthlyGroups = data.reduce((acc, item) => {
       const date = new Date(item.date_start);
       if (!date || isNaN(date.getTime())) return acc;
@@ -209,8 +252,10 @@ const InternshipReport = () => {
       
       acc[monthYear].total += 1;
       
+      // Determine status based on end date
       const currentDate = new Date();
       const endDate = new Date(item.date_end);
+      
       if (endDate >= currentDate) {
         acc[monthYear].active += 1;
       } else {
@@ -221,7 +266,7 @@ const InternshipReport = () => {
     }, {});
     
     // Convert to array and sort by date
-    const monthlyArray = Object.values(monthlyGroups).sort((a, b) => {
+    const monthlyArray = Object.values(monthlyGroups).sort((a,b) => {
       const [aMonth, aYear] = a.name.split(' ');
       const [bMonth, bYear] = b.name.split(' ');
       
@@ -234,12 +279,11 @@ const InternshipReport = () => {
     setMonthlyData(monthlyArray);
   }
   
+  // Process department distribution
   const processDepartmentDistribution = (data) => {
     // Group data by department
     const deptGroups = data.reduce((acc, item) => {
-      const deptId = item.department_id;
-      const dept = departments.find(d => d.id === deptId);
-      const deptName = dept ? dept.name : item.department_name || 'Unknown';
+      const deptName = item.department_name || 'Unknown';
       
       if (!acc[deptName]) {
         acc[deptName] = {
@@ -264,8 +308,9 @@ const InternshipReport = () => {
     setDepartmentDistribution(deptArray);
   }
   
+  // Process monthly breakdown
   const processMonthlyBreakdown = (data) => {
-    // Group by month based on start date
+    // Group by month
     const monthlyData = data.reduce((acc, item) => {
       const date = new Date(item.date_start);
       if (!date || isNaN(date.getTime())) return acc;
@@ -283,8 +328,10 @@ const InternshipReport = () => {
       
       acc[monthYear].total += 1;
       
+      // Determine status based on end date
       const currentDate = new Date();
       const endDate = new Date(item.date_end);
+      
       if (endDate >= currentDate) {
         acc[monthYear].active += 1;
       } else {
@@ -294,10 +341,10 @@ const InternshipReport = () => {
       return acc;
     }, {});
     
-    // Convert to array and calculate active rate
+    // Convert to array and calculate completion rate
     const result = Object.values(monthlyData).map(month => ({
       ...month,
-      activeRate: month.total > 0 ? ((month.active / month.total) * 100).toFixed(1) : '0'
+      completionRate: month.total > 0 ? ((month.active / month.total) * 100).toFixed(1) : '0'
     })).sort((a, b) => {
       // Sort by date (most recent first)
       const [aMonth, aYear] = a.month.split(' ');
@@ -312,27 +359,78 @@ const InternshipReport = () => {
     setMonthlyBreakdown(result);
   }
 
+  // Handle filter change
+  const handleFilterChange = (field, value) => {
+    let updatedFilters = { ...filters };
+    
+    if (field === 'dateRange') {
+      updatedFilters.dateRange = value;
+      
+      // Set date range based on selection
+      if (value === 'all') {
+        updatedFilters.startDate = null;
+        updatedFilters.endDate = null;
+      } else if (value === 'last30') {
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        updatedFilters.startDate = startDate;
+        updatedFilters.endDate = endDate;
+      } else if (value === 'last90') {
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 90);
+        updatedFilters.startDate = startDate;
+        updatedFilters.endDate = endDate;
+      } else if (value === 'thisYear') {
+        const endDate = new Date();
+        const startDate = new Date(new Date().getFullYear(), 0, 1);
+        updatedFilters.startDate = startDate;
+        updatedFilters.endDate = endDate;
+      } else if (value === 'lastYear') {
+        const startDate = new Date(new Date().getFullYear() - 1, 0, 1);
+        const endDate = new Date(new Date().getFullYear() - 1, 11, 31);
+        updatedFilters.startDate = startDate;
+        updatedFilters.endDate = endDate;
+      }
+      // For custom, we leave the dates as they are
+    } else {
+      // Normal filter update
+      updatedFilters[field] = value;
+      
+      // If updating custom dates, change dateRange to custom
+      if (field === 'startDate' || field === 'endDate') {
+        updatedFilters.dateRange = 'custom';
+      }
+    }
+    
+    setFilters(updatedFilters);
+  };
+
+  // Export to Excel functionality
   const exportToExcel = async () => {
     try {
       setExportLoading(true);
       
-      // Format the data according to the specified format
+      // Format the data for export
       const exportData = filteredData.map((record, index) => {
-        // Find department name if it's not directly available
-        const deptName = record.department_name || 
-          (record.department_id ? departments.find(d => d.id === record.department_id)?.name : '') || 
-          'Unknown';
-          
+        // Determine status based on end date
+        const currentDate = new Date();
+        const endDate = new Date(record.date_end);
+        const status = endDate >= currentDate ? 'Active' : 'Expired';
+        
         return {
           'No.': index + 1,
-          'Names': record.full_names,
-          'Department': deptName,
-          'Role': record.role || '',
-          'Start Date': record.date_start ? format(new Date(record.date_start), 'yyyy-MM-dd') : '',
-          'End Date': record.date_end ? format(new Date(record.date_end), 'yyyy-MM-dd') : '',
-          'Status': new Date(record.date_end) >= new Date() ? 'Active' : 'Expired',
-          'From Company': record.from_company || '',
-          'Contact Number': record.contact_number || ''
+          'Full Name': record.full_names,
+          'Department': record.department_name || 'Unknown',
+          'Citizenship': record.citizenship,
+          'ID/Passport': record.id_passport_number,
+          'Start Date': record.date_start ? format(new Date(record.date_start), 'yyyy-MM-dd') : 'N/A',
+          'End Date': record.date_end ? format(new Date(record.date_end), 'yyyy-MM-dd') : 'N/A',
+          'Supervisor': record.work_with || 'N/A',
+          'Contact Number': record.contact_number || 'N/A',
+          'Status': status,
+          'Created By': record.created_by || 'N/A'
         };
       });
 
@@ -373,7 +471,7 @@ const InternshipReport = () => {
       }
       
       if (filters.status !== 'all') {
-        fileName += `_${filters.status}`;
+        fileName += `_status-${filters.status}`;
       }
       
       fileName += '.xlsx';
@@ -381,7 +479,10 @@ const InternshipReport = () => {
       // Write the file
       XLSX.writeFile(workbook, fileName);
       
-      // Log the export activity
+      // Show success toast
+      showToast('Report exported successfully', 'success');
+      
+      // Log the export activity if available
       if (apiService.activityLog && typeof apiService.activityLog.logActivity === 'function') {
         await apiService.activityLog.logActivity({
           userId: user.id,
@@ -391,12 +492,14 @@ const InternshipReport = () => {
       }
       
     } catch (error) {
-      console.error('Error exporting to Excel:', error)
+      console.error('Error exporting to Excel:', error);
+      showToast('Failed to export report');
     } finally {
       setExportLoading(false);
     }
-  }
+  };
 
+  // Render internship statistics cards
   const renderInternshipStats = () => (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
       <Card className="overflow-hidden border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
@@ -407,7 +510,7 @@ const InternshipReport = () => {
         <CardContent className="pt-6">
           <div className="text-2xl font-bold">{stats.totalInternships}</div>
           <p className="text-xs text-muted-foreground mt-2">
-            Total internships processed
+            Total internships registered
           </p>
         </CardContent>
       </Card>
@@ -428,7 +531,7 @@ const InternshipReport = () => {
       <Card className="overflow-hidden border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-[#0A2647]/5 dark:bg-[#0A2647]/20">
           <CardTitle className="text-sm font-medium">Expired</CardTitle>
-          <AlertCircle className="h-4 w-4 text-[#0A2647]" />
+          <BadgeCheck className="h-4 w-4 text-[#0A2647]" />
         </CardHeader>
         <CardContent className="pt-6">
           <div className="text-2xl font-bold">{stats.expiredInternships}</div>
@@ -440,101 +543,67 @@ const InternshipReport = () => {
     </div>
   )
 
-  const renderPieChart = () => (
+  // Render pie chart
+  const renderPieChart = (data, title) => (
     <Card className="col-span-1 md:col-span-2 border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
       <CardHeader className="bg-[#0A2647]/5 dark:bg-[#0A2647]/20">
         <CardTitle className="flex items-center text-lg font-medium">
-          <BarChart2 className="w-4 h-4 mr-2 text-[#0A2647]" />
-          Monthly Trend
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={monthlyData}
-              margin={{
-                top: 10,
-                right: 30,
-                left: 0,
-                bottom: 0,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#fff', 
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  border: 'none',
-                  padding: '8px 12px'
-                }}
-              />
-              <Legend />
-              <Area type="monotone" dataKey="active" stackId="1" stroke="#0A2647" fill="#0A2647" name="Active" />
-              <Area type="monotone" dataKey="expired" stackId="1" stroke="#144272" fill="#144272" name="Expired" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  )
-
-  const renderStatusDistributionChart = () => (
-    <Card className="col-span-1 md:col-span-1 border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
-      <CardHeader className="bg-[#0A2647]/5 dark:bg-[#0A2647]/20">
-        <CardTitle className="flex items-center text-lg font-medium">
           <PieChartIcon className="w-4 h-4 mr-2 text-[#0A2647]" />
-          Internship Status Distribution
+          {title}
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-6">
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={statusDistribution}
-                cx="50%"
-                cy="50%"
-                labelLine={true}
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="value"
-                label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(1)}%)`}
-              >
-                {statusDistribution.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip 
-                formatter={(value, name) => [`${value} (${statusDistribution.find(item => item.name === name)?.percentage}%)`, name]}
-                contentStyle={{ 
-                  backgroundColor: '#fff', 
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  border: 'none',
-                  padding: '8px 12px'
-                }}
-              />
-              <Legend 
-                layout="vertical" 
-                verticalAlign="middle" 
-                align="right"
-                formatter={(value, entry) => (
-                  <span style={{ color: entry.color, fontWeight: 'medium' }}>
-                    {value}
-                  </span>
-                )}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          {data.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(1)}%)`}
+                >
+                  {data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value, name) => [`${value} (${data.find(item => item.name === name)?.percentage}%)`, name]}
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    border: 'none',
+                    padding: '8px 12px'
+                  }}
+                />
+                <Legend 
+                  layout="vertical" 
+                  verticalAlign="middle" 
+                  align="right"
+                  formatter={(value, entry) => (
+                    <span style={{ color: entry.color, fontWeight: 'medium' }}>
+                      {value}
+                    </span>
+                  )}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500 dark:text-gray-400">No data available</p>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
   )
 
+  // Render department distribution
   const renderDepartmentDistribution = () => (
     <Card className="col-span-1 border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
       <CardHeader className="bg-[#0A2647]/5 dark:bg-[#0A2647]/20">
@@ -545,44 +614,103 @@ const InternshipReport = () => {
       </CardHeader>
       <CardContent className="pt-6">
         <div className="h-80 overflow-y-auto pr-2">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Department
-                </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Count
-                </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  %
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {departmentDistribution.map((dept, index) => (
-                <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                      {dept.name}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-right">
-                    {dept.value}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-right">
-                    {dept.percentage}%
-                  </td>
+          {departmentDistribution.length > 0 ? (
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Count
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    %
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {departmentDistribution.map((dept, index) => (
+                  <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                      <div className="flex items-center">
+                        <div 
+                          className="w-3 h-3 rounded-full mr-2" 
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        ></div>
+                        {dept.name}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-right">
+                      {dept.value}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-right">
+                      {dept.percentage}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500 dark:text-gray-400">No data available</p>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
   )
 
+  // Render monthly trend
+  const renderMonthlyTrend = () => (
+    <Card className="col-span-1 md:col-span-3 border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
+      <CardHeader className="bg-[#0A2647]/5 dark:bg-[#0A2647]/20">
+        <CardTitle className="flex items-center text-lg font-medium">
+          <BarChart2 className="w-4 h-4 mr-2 text-[#0A2647]" />
+          Monthly Trend
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-6">
+        <div className="h-80">
+          {monthlyData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={monthlyData}
+                margin={{
+                  top: 20,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    border: 'none',
+                    padding: '8px 12px'
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="active" name="Active" fill="#0A2647" />
+                <Bar dataKey="expired" name="Expired" fill="#144272" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500 dark:text-gray-400">No data available</p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+  
+  // Render monthly breakdown
   const renderMonthlyBreakdown = () => (
     <Card className="mt-6 border-none shadow-md hover:shadow-lg transition-shadow duration-300 dark:bg-gray-800">
       <CardHeader className="bg-[#0A2647]/5 dark:bg-[#0A2647]/20">
@@ -616,13 +744,13 @@ const InternshipReport = () => {
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#0A2647]" />
+                  <td colSpan={5} className="px-6 py-4 text-center">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#0A2647]" />
                   </td>
                 </tr>
               ) : monthlyBreakdown.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     No data available
                   </td>
                 </tr>
@@ -646,11 +774,11 @@ const InternshipReport = () => {
                         <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mr-2">
                           <div 
                             className="bg-[#0A2647] h-2.5 rounded-full" 
-                            style={{ width: `${month.activeRate}%` }}
+                            style={{ width: `${month.completionRate}%` }}
                           ></div>
                         </div>
                         <span className="text-sm text-gray-500 dark:text-gray-300">
-                          {month.activeRate}%
+                          {month.completionRate}%
                         </span>
                       </div>
                     </td>
@@ -664,6 +792,7 @@ const InternshipReport = () => {
     </Card>
   )
 
+  // Render loading state
   if (pageLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -672,18 +801,30 @@ const InternshipReport = () => {
     )
   }
 
+  // Main render method
   return (
     <div className="flex flex-col min-h-[calc(100vh-theme(spacing.16))]">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </AnimatePresence>
+      
       <div className="flex-1 flex justify-center">
         <div className="w-full max-w-[80%] px-4 pb-8">
           <div className="flex justify-between items-center pt-2 mb-6">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Internship Report
+              Internship Analysis
             </h1>
             <Button
               onClick={exportToExcel}
               disabled={exportLoading}
-              className="bg-[#0A2647]/90 text-white flex items-center space-x-2"
+              className="bg-[#0A2647] hover:bg-[#0A2647]/90 text-white flex items-center space-x-2"
             >
               {exportLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -710,34 +851,7 @@ const InternshipReport = () => {
                   </label>
                   <select
                     value={filters.dateRange}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      let startDate = null;
-                      let endDate = null;
-                      
-                      if (value === 'last30') {
-                        startDate = new Date();
-                        startDate.setDate(startDate.getDate() - 30);
-                        endDate = new Date();
-                      } else if (value === 'last90') {
-                        startDate = new Date();
-                        startDate.setDate(startDate.getDate() - 90);
-                        endDate = new Date();
-                      } else if (value === 'thisYear') {
-                        startDate = new Date(new Date().getFullYear(), 0, 1);
-                        endDate = new Date();
-                      } else if (value === 'lastYear') {
-                        startDate = new Date(new Date().getFullYear() - 1, 0, 1);
-                        endDate = new Date(new Date().getFullYear() - 1, 11, 31);
-                      }
-                      
-                      setFilters(prev => ({
-                        ...prev,
-                        dateRange: value,
-                        startDate,
-                        endDate
-                      }));
-                    }}
+                    onChange={(e) => handleFilterChange('dateRange', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="all">All Time</option>
@@ -757,7 +871,7 @@ const InternshipReport = () => {
                       </label>
                       <DatePicker
                         selected={filters.startDate}
-                        onChange={(date) => setFilters(prev => ({ ...prev, startDate: date }))}
+                        onChange={(date) => handleFilterChange('startDate', date)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         placeholderText="Select start date"
                       />
@@ -769,7 +883,7 @@ const InternshipReport = () => {
                       </label>
                       <DatePicker
                         selected={filters.endDate}
-                        onChange={(date) => setFilters(prev => ({ ...prev, endDate: date }))}
+                        onChange={(date) => handleFilterChange('endDate', date)}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         placeholderText="Select end date"
                         minDate={filters.startDate}
@@ -784,7 +898,7 @@ const InternshipReport = () => {
                   </label>
                   <select
                     value={filters.department}
-                    onChange={(e) => setFilters(prev => ({ ...prev, department: e.target.value }))}
+                    onChange={(e) => handleFilterChange('department', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
                     <option value="all">All Departments</option>
@@ -802,16 +916,16 @@ const InternshipReport = () => {
                   </label>
                   <select
                     value={filters.status}
-                    onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0A2647] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
-                    <option value="all">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="expired">Expired</option>
+                    <option value="all">All Statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="Expired">Expired</option>
                   </select>
                 </div>
 
-                <div className="mt-4 flex justify-end">
+                <div className="flex items-end">
                   <Button
                     onClick={() => {
                       setFilters({
@@ -838,12 +952,12 @@ const InternshipReport = () => {
 
           {/* Charts */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            {renderStatusDistributionChart()}
+            {renderPieChart(statusDistribution, 'Internship Status Distribution')}
             {renderDepartmentDistribution()}
           </div>
 
           {/* Monthly Trend */}
-          {renderPieChart()}
+          {renderMonthlyTrend()}
           
           {/* Monthly Breakdown */}
           {renderMonthlyBreakdown()}

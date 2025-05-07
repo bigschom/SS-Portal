@@ -1,381 +1,198 @@
-// src/pages/security-services/task/context/TaskContext.jsx
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
-import apiClient from '../../../../config/api-service';
-import { REQUEST_STATUS } from '../utils/taskConstants';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { requestNotificationPermission } from '../../../../utils/notificationUtils';
 
-const TaskContext = createContext(null);
+// Create context
+const TaskContext = createContext();
 
-const initialState = {
-  requests: {
-    available: [],
-    assigned: [],
-    submitted: [],
-    sentBack: []
-  },
-  loading: true,
-  error: null,
-  success: null,
-  actionLoading: {}
-};
-
-// Helper function to ensure arrays
-const ensureArray = (data) => {
-  if (Array.isArray(data)) return data;
-  return [];
-};
-
-const taskReducer = (state, action) => {
-  switch (action.type) {
-    case 'SET_REQUESTS':
-      return {
-        ...state,
-        requests: {
-          available: ensureArray(action.payload.available),
-          assigned: ensureArray(action.payload.assigned),
-          submitted: ensureArray(action.payload.submitted),
-          sentBack: ensureArray(action.payload.sentBack)
-        }
-      };
-    case 'SET_LOADING':
-      return {
-        ...state,
-        loading: action.payload
-      };
-    case 'SET_ACTION_LOADING':
-      return {
-        ...state,
-        actionLoading: {
-          ...state.actionLoading,
-          [action.payload.id]: action.payload.status
-        }
-      };
-    case 'SET_ERROR':
-      return {
-        ...state,
-        error: action.payload,
-        success: null
-      };
-    case 'SET_SUCCESS':
-      return {
-        ...state,
-        success: action.payload,
-        error: null
-      };
-    case 'CLEAR_MESSAGES':
-      return {
-        ...state,
-        error: null,
-        success: null
-      };
-    default:
-      return state;
+export const useTaskContext = () => {
+  const context = useContext(TaskContext);
+  if (!context) {
+    throw new Error('useTaskContext must be used within a TaskProvider');
   }
+  return context;
 };
 
 export const TaskProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(taskReducer, initialState);
-
-  const fetchRequests = useCallback(async (userId) => {
-    if (!userId) return;
-
-    dispatch({ type: 'SET_LOADING', payload: true });
+  // Get user from sessionStorage instead of useAuth hook
+  const getUserFromStorage = () => {
     try {
-      // Fetch all request types in parallel
-      const [available, assigned, submitted, sentBack] = await Promise.all([
-        apiClient.tasks.getAvailableRequests(userId),
-        apiClient.tasks.getAssignedRequests(userId),
-        apiClient.tasks.getSubmittedRequests(userId),
-        apiClient.tasks.getSentBackRequests(userId)
-      ]);
-      
-      dispatch({
-        type: 'SET_REQUESTS',
-        payload: {
-          available, 
-          assigned, 
-          submitted, 
-          sentBack
-        }
-      });
+      const userStr = sessionStorage.getItem('user');
+      return userStr ? JSON.parse(userStr) : null;
     } catch (error) {
-      console.error('Error in fetchRequests:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load requests. Please try again.' });
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
+      console.error('Error parsing user from sessionStorage:', error);
+      return null;
     }
-  }, []);
+  };
+  
+  const user = getUserFromStorage();
+  
+  // Create a simplified toast function
+  const toast = {
+    success: (message) => console.log('Success:', message),
+    error: (message) => console.error('Error:', message),
+    warning: (message) => console.warn('Warning:', message),
+    info: (message) => console.info('Info:', message)
+  };
+  
+  // State variables
+  const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('available');
+  const [actionLoading, setActionLoading] = useState({});
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [showHandlersTab, setShowHandlersTab] = useState(false);
+  
+  // Dialog states
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editableData, setEditableData] = useState(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showSendBackDialog, setShowSendBackDialog] = useState(false);
+  const [viewResponsesOpen, setViewResponsesOpen] = useState(false);
+  const [editPermission, setEditPermission] = useState(false);
+  
+  // Form states
+  const [commentText, setCommentText] = useState('');
+  const [responseText, setResponseText] = useState('');
+  const [sendBackReason, setSendBackReason] = useState('');
+  
+  // Timer state
+  const [timeLeftInMinutes, setTimeLeftInMinutes] = useState(null);
 
-  const assignRequest = useCallback(async (request, userId) => {
-    dispatch({ 
-      type: 'SET_ACTION_LOADING', 
-      payload: { id: request.id, status: true } 
-    });
-    try {
-      const result = await apiClient.tasks.claimRequest(request.id, userId);
-      
-      if (result && result.error) {
-        throw new Error(result.error);
-      }
-      
-      await fetchRequests(userId);
-      dispatch({ type: 'SET_SUCCESS', payload: 'Request assigned successfully' });
-      
-      return result;
-    } catch (error) {
-      console.error('Error in assignRequest:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to assign request. Please try again.' });
-      throw error;
-    } finally {
-      dispatch({ 
-        type: 'SET_ACTION_LOADING', 
-        payload: { id: request.id, status: false } 
-      });
-    }
-  }, [fetchRequests]);
-
-  const updateStatus = useCallback(async (requestId, status, userId) => {
-    dispatch({ 
-      type: 'SET_ACTION_LOADING', 
-      payload: { id: requestId, status: true } 
-    });
-    try {
-      const result = await apiClient.tasks.updateRequestStatus(requestId, status, userId);
-      
-      if (result && result.error) {
-        throw new Error(result.error);
-      }
-      
-      await fetchRequests(userId);
-      dispatch({ type: 'SET_SUCCESS', payload: `Request ${status.replace('_', ' ')}` });
-      
-      return result;
-    } catch (error) {
-      console.error('Error in updateStatus:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to update status. Please try again.' });
-      throw error;
-    } finally {
-      dispatch({ 
-        type: 'SET_ACTION_LOADING', 
-        payload: { id: requestId, status: false } 
-      });
-    }
-  }, [fetchRequests]);
-
-  const submitResponse = useCallback(async (requestId, response, userId) => {
-    dispatch({ 
-      type: 'SET_ACTION_LOADING', 
-      payload: { id: requestId, status: true } 
-    });
-    try {
-      // First add the comment
-      const commentResult = await apiClient.tasks.addComment(requestId, userId, response);
-      
-      if (commentResult && commentResult.error) {
-        throw new Error(commentResult.error);
-      }
-      
-      // Then update the status to completed
-      const result = await apiClient.tasks.updateRequestStatus(requestId, 'completed', userId);
-      
-      if (result && result.error) {
-        throw new Error(result.error);
-      }
-      
-      await fetchRequests(userId);
-      dispatch({ type: 'SET_SUCCESS', payload: 'Request completed successfully' });
-      
-      return result;
-    } catch (error) {
-      console.error('Error in submitResponse:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to submit response. Please try again.' });
-      throw error;
-    } finally {
-      dispatch({ 
-        type: 'SET_ACTION_LOADING', 
-        payload: { id: requestId, status: false } 
-      });
-    }
-  }, [fetchRequests]);
-
-  const sendBackToRequestor = useCallback(async (requestId, comment, userId) => {
-    dispatch({ 
-      type: 'SET_ACTION_LOADING', 
-      payload: { id: requestId, status: true } 
-    });
-    try {
-      // Add the comment with send back reason flag
-      const commentResult = await apiClient.tasks.addComment(requestId, userId, comment, true);
-      
-      if (commentResult && commentResult.error) {
-        throw new Error(commentResult.error);
-      }
-      
-      // Update the status to sent_back and clear assigned_to
-      const result = await apiClient.tasks.updateRequestStatus(
-        requestId, 
-        'sent_back', 
-        userId,
-        { assigned_to: null }
-      );
-      
-      if (result && result.error) {
-        throw new Error(result.error);
-      }
-      
-      await fetchRequests(userId);
-      dispatch({ type: 'SET_SUCCESS', payload: 'Request sent back for correction' });
-      
-      return result;
-    } catch (error) {
-      console.error('Error in sendBackToRequestor:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to send request back. Please try again.' });
-      throw error;
-    } finally {
-      dispatch({ 
-        type: 'SET_ACTION_LOADING', 
-        payload: { id: requestId, status: false } 
-      });
-    }
-  }, [fetchRequests]);
-
-  const saveEditedRequest = useCallback(async (requestId, editedData, userId) => {
-    dispatch({ 
-      type: 'SET_ACTION_LOADING', 
-      payload: { id: requestId, status: true } 
-    });
-    try {
-      const result = await apiClient.tasks.updateRequestData(requestId, {
-        ...editedData,
-        updated_by: userId,
-        status: 'new'
-      });
-      
-      if (result && result.error) {
-        throw new Error(result.error);
-      }
-      
-      await fetchRequests(userId);
-      dispatch({ type: 'SET_SUCCESS', payload: 'Request updated successfully' });
-      
-      return result;
-    } catch (error) {
-      console.error('Error in saveEditedRequest:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to save changes. Please try again.' });
-      throw error;
-    } finally {
-      dispatch({ 
-        type: 'SET_ACTION_LOADING', 
-        payload: { id: requestId, status: false } 
-      });
-    }
-  }, [fetchRequests]);
-
-  const autoReturnTask = useCallback(async (request, userId) => {
-    try {
-      if (request && request.status === REQUEST_STATUS.IN_PROGRESS && request.updated_at) {
-        const assignedTime = new Date(request.updated_at).getTime();
-        const currentTime = new Date().getTime();
-        
-        // 30 minutes in milliseconds
-        if (currentTime - assignedTime > 30 * 60 * 1000) {
-          await apiClient.tasks.updateRequestStatus(
-            request.id,
-            'new',
-            userId,
-            {
-              assigned_to: null,
-              details: 'Request automatically returned due to inactivity'
-            }
-          );
-          await fetchRequests(userId);
+  // Initialize notifications
+  useEffect(() => {
+    const initNotifications = async () => {
+      const hasPermission = await requestNotificationPermission();
+      if (hasPermission && 'serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.register('/service-worker.js');
+          console.log('ServiceWorker registration successful');
+        } catch (error) {
+          console.error('ServiceWorker registration failed:', error);
         }
       }
-    } catch (error) {
-      console.error('Error in autoReturnTask:', error);
-    }
-  }, [fetchRequests]);
-
-  const checkTimeouts = useCallback(async (userId) => {
-    const { assigned } = state.requests;
-    if (Array.isArray(assigned)) {
-      for (const request of assigned) {
-        await autoReturnTask(request, userId);
-      }
-    }
-  }, [state.requests, autoReturnTask]);
-
-  // Set up auto-refresh interval to check for timeouts
-  useEffect(() => {
-    let interval;
-    const userStr = sessionStorage.getItem('user');
-    let userId = null;
-    
-    if (userStr) {
-      try {
-        const userData = JSON.parse(userStr);
-        userId = userData.id;
-      } catch (e) {
-        console.error('Error parsing user data:', e);
-      }
-    }
-    
-    if (userId && Array.isArray(state.requests.assigned) && state.requests.assigned.length > 0) {
-      interval = setInterval(() => {
-        checkTimeouts(userId);
-      }, 60000); // Check every minute
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
+      setNotificationsEnabled(hasPermission);
     };
-  }, [state.requests.assigned, checkTimeouts]);
-
-  const setError = useCallback((message) => {
-    dispatch({ type: 'SET_ERROR', payload: message });
-  }, []);
-
-  const setSuccess = useCallback((message) => {
-    dispatch({ type: 'SET_SUCCESS', payload: message });
-  }, []);
-
-  const clearMessages = useCallback(() => {
-    dispatch({ type: 'CLEAR_MESSAGES' });
-  }, []);
-
-  // Auto-dismiss messages after a delay
-  useEffect(() => {
-    let timer;
-    if (state.success) {
-      timer = setTimeout(() => clearMessages(), 5000);
-    } else if (state.error) {
-      timer = setTimeout(() => clearMessages(), 10000);
-    }
     
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [state.success, state.error, clearMessages]);
+    initNotifications();
+  }, []);
 
-  const value = {
-    ...state,
-    fetchRequests,
-    assignRequest,
-    updateStatus,
-    submitResponse,
-    sendBackToRequestor,
-    saveEditedRequest,
-    setError,
-    setSuccess,
-    clearMessages
+  // Auto-dismiss notifications
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Set loading for a specific request
+  const setRequestLoading = (requestId, isLoading) => {
+    setActionLoading(prev => ({ ...prev, [requestId]: isLoading }));
   };
 
-  return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;
-};
+  // Clear dialog states
+  const clearDialogStates = () => {
+    setIsDialogOpen(false);
+    setSelectedRequest(null);
+    setCommentText('');
+    setResponseText('');
+    setSendBackReason('');
+    setShowEditDialog(false);
+    setShowSendBackDialog(false);
+    setViewResponsesOpen(false);
+  };
 
-export const useTask = () => {
-  const context = useContext(TaskContext);
-  if (!context) {
-    throw new Error('useTask must be used within a TaskProvider');
-  }
-  return context;
+  // Toggle a dialog
+  const toggleDialog = (dialogName, value, request = null) => {
+    switch (dialogName) {
+      case 'main':
+        setIsDialogOpen(value);
+        if (request) {
+          setSelectedRequest(request);
+          setEditableData(request);
+        }
+        break;
+      case 'edit':
+        setShowEditDialog(value);
+        break;
+      case 'sendBack':
+        setShowSendBackDialog(value);
+        break;
+      case 'viewResponses':
+        setViewResponsesOpen(value);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Share values through context
+  const contextValue = {
+    // State values
+    user,
+    loading,
+    setLoading,
+    pageLoading,
+    setPageLoading,
+    error,
+    setError,
+    success,
+    setSuccess,
+    searchTerm,
+    setSearchTerm,
+    activeTab,
+    setActiveTab,
+    actionLoading,
+    setActionLoading,
+    notificationsEnabled,
+    showHandlersTab,
+    setShowHandlersTab,
+    
+    // Request related states
+    selectedRequest,
+    setSelectedRequest,
+    isDialogOpen,
+    setIsDialogOpen,
+    editableData,
+    setEditableData,
+    showEditDialog,
+    showSendBackDialog,
+    viewResponsesOpen,
+    editPermission,
+    setEditPermission,
+    
+    // Form states
+    commentText,
+    setCommentText,
+    responseText,
+    setResponseText,
+    sendBackReason,
+    setSendBackReason,
+    
+    // Timer state
+    timeLeftInMinutes,
+    setTimeLeftInMinutes,
+    
+    // Utility functions
+    setRequestLoading,
+    clearDialogStates,
+    toggleDialog,
+    toast
+  };
+
+  return (
+    <TaskContext.Provider value={contextValue}>
+      {children}
+    </TaskContext.Provider>
+  );
 };

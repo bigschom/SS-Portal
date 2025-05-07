@@ -1,5 +1,6 @@
 // server/controllers/security-controller.js
 import { query } from '../db.js';
+import { generateReferenceNumber, getNextSequentialNumber } from '../../src/pages/security-services/new-request/utils/referenceNumberUtils.js';
 
 /**
  * Get available security services
@@ -158,23 +159,18 @@ export const submitBackofficeAppointment = async (req, res) => {
     // Start a transaction
     await query('BEGIN');
     
-    // Generate a unique reference number
-    const lastRequestResult = await query(
-      `SELECT reference_number 
-       FROM service_requests 
-       WHERE reference_number LIKE 'BOA-${new Date().getFullYear()}%'
-       ORDER BY created_at DESC 
-       LIMIT 1`
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
     );
     
-    let sequenceNumber = 1;
-    if (lastRequestResult.rows.length > 0) {
-      const lastRefNumber = lastRequestResult.rows[0].reference_number;
-      const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-      sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-    }
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
     
-    const referenceNumber = `BOA-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
     
     // Get the creator's ID - use either the user ID from request or from the auth token
     const createdBy = req.body.userId || req.user.id || req.user.username;
@@ -269,23 +265,18 @@ export const submitCallHistoryRequest = async (req, res) => {
     // Start a transaction
     await query('BEGIN');
     
-    // Generate reference number
-    const lastRequestResult = await query(
-      `SELECT reference_number 
-       FROM service_requests 
-       WHERE reference_number LIKE 'CHR-${new Date().getFullYear()}%'
-       ORDER BY created_at DESC 
-       LIMIT 1`
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
     );
     
-    let sequenceNumber = 1;
-    if (lastRequestResult.rows.length > 0) {
-      const lastRefNumber = lastRequestResult.rows[0].reference_number;
-      const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-      sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-    }
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
     
-    const referenceNumber = `CHR-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
     
     // Get the creator's ID - use either the user ID from request or from the auth token
     const createdBy = userId || req.user.id || req.user.username;
@@ -380,23 +371,18 @@ export const submitMomoTransactionRequest = async (req, res) => {
     // Start a transaction
     await query('BEGIN');
     
-    // Generate reference number
-    const lastRequestResult = await query(
-      `SELECT reference_number 
-       FROM service_requests 
-       WHERE reference_number LIKE 'MTR-${new Date().getFullYear()}%'
-       ORDER BY created_at DESC 
-       LIMIT 1`
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
     );
     
-    let sequenceNumber = 1;
-    if (lastRequestResult.rows.length > 0) {
-      const lastRefNumber = lastRequestResult.rows[0].reference_number;
-      const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-      sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-    }
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
     
-    const referenceNumber = `MTR-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
     
     // Get the creator's ID - use either the user ID from request or from the auth token
     const createdBy = userId || req.user.id || req.user.username;
@@ -491,23 +477,18 @@ export const submitUnblockMomoRequest = async (req, res) => {
     // Start a transaction
     await query('BEGIN');
     
-    // Generate reference number
-    const lastRequestResult = await query(
-      `SELECT reference_number 
-       FROM service_requests 
-       WHERE reference_number LIKE 'UMR-${new Date().getFullYear()}%'
-       ORDER BY created_at DESC 
-       LIMIT 1`
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
     );
     
-    let sequenceNumber = 1;
-    if (lastRequestResult.rows.length > 0) {
-      const lastRefNumber = lastRequestResult.rows[0].reference_number;
-      const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-      sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-    }
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
     
-    const referenceNumber = `UMR-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
     
     // Get the creator's ID - use either the user ID from request or from the auth token
     const createdBy = userId || req.user.id || req.user.username;
@@ -602,23 +583,18 @@ export const submitMoneyRefundRequest = async (req, res) => {
     // Start a transaction
     await query('BEGIN');
     
-    // Generate reference number
-    const lastRequestResult = await query(
-      `SELECT reference_number 
-       FROM service_requests 
-       WHERE reference_number LIKE 'MRR-${new Date().getFullYear()}%'
-       ORDER BY created_at DESC 
-       LIMIT 1`
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
     );
     
-    let sequenceNumber = 1;
-    if (lastRequestResult.rows.length > 0) {
-      const lastRefNumber = lastRequestResult.rows[0].reference_number;
-      const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-      sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-    }
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
     
-    const referenceNumber = `MRR-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
     
     // Get the creator's ID - use either the user ID from request or from the auth token
     const createdBy = userId || req.user.id || req.user.username;
@@ -704,436 +680,416 @@ export const submitMoneyRefundRequest = async (req, res) => {
  * @param {Object} res - Express response object
  */
 export const submitSerialNumberRequest = async (req, res) => {
-    try {
-      const { formData, phoneRequests, serviceType, userId } = req.body;
-      
-      console.log('Received serial number request:', { formData, phoneRequests });
-      
-      // Validate required fields
-      if (!formData || !phoneRequests || !Array.isArray(phoneRequests)) {
-        return res.status(400).json({ error: 'Invalid request data' });
-      }
-      
-      // Start a transaction
-      await query('BEGIN');
-      
-      // Generate reference number
-      const lastRequestResult = await query(
-        `SELECT reference_number 
-         FROM service_requests 
-         WHERE reference_number LIKE 'SNR-${new Date().getFullYear()}%'
-         ORDER BY created_at DESC 
-         LIMIT 1`
-      );
-      
-      let sequenceNumber = 1;
-      if (lastRequestResult.rows.length > 0) {
-        const lastRefNumber = lastRequestResult.rows[0].reference_number;
-        const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-        sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-      }
-      
-      const referenceNumber = `SNR-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
-      
-      // Get the creator's ID - use either the user ID from request or from the auth token
-      const createdBy = userId || req.user.id || req.user.username;
-      
-      if (!createdBy) {
-        await query('ROLLBACK');
-        return res.status(400).json({ error: 'User information not available' });
-      }
-      
-      // Insert the main service request
-      const serviceRequestResult = await query(
-        `INSERT INTO service_requests (
-          reference_number, 
-          service_type, 
-          full_names, 
-          id_passport, 
-          primary_contact, 
-          secondary_contact, 
-          details, 
-          created_by, 
-          status,
-          created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-        RETURNING id`,
+  try {
+    const { formData, phoneRequests, serviceType, userId } = req.body;
+    
+    console.log('Received serial number request:', { formData, phoneRequests });
+    
+    // Validate required fields
+    if (!formData || !phoneRequests || !Array.isArray(phoneRequests)) {
+      return res.status(400).json({ error: 'Invalid request data' });
+    }
+    
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
+    );
+    
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
+    
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
+    
+    // Get the creator's ID - use either the user ID from request or from the auth token
+    const createdBy = userId || req.user.id || req.user.username;
+    
+    if (!createdBy) {
+      await query('ROLLBACK');
+      return res.status(400).json({ error: 'User information not available' });
+    }
+    
+    // Insert the main service request
+    const serviceRequestResult = await query(
+      `INSERT INTO service_requests (
+        reference_number, 
+        service_type, 
+        full_names, 
+        id_passport, 
+        primary_contact, 
+        secondary_contact, 
+        details, 
+        created_by, 
+        status,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      RETURNING id`,
+      [
+        referenceNumber,
+        serviceType || 'serial_number_request',
+        formData.full_names,
+        formData.id_passport,
+        formData.primary_contact,
+        formData.secondary_contact || null,
+        formData.details || null,
+        createdBy,
+        'new'
+      ]
+    );
+    
+    const serviceRequestId = serviceRequestResult.rows[0].id;
+    
+    // Insert serial number request details
+    for (const request of phoneRequests) {
+      await query(
+        `INSERT INTO serial_number_requests (
+          service_request_id,
+          phone_number,
+          phone_brand,
+          start_date,
+          end_date
+        ) VALUES ($1, $2, $3, $4, $5)`,
         [
-          referenceNumber,
-          serviceType || 'serial_number_request',
-          formData.full_names,
-          formData.id_passport,
-          formData.primary_contact,
-          formData.secondary_contact || null,
-          formData.details || null,
-          createdBy,
-          'new'
+          serviceRequestId,
+          request.phone_number,
+          request.phone_brand,
+          request.start_date,
+          request.end_date
         ]
       );
-      
-      const serviceRequestId = serviceRequestResult.rows[0].id;
-      
-      // Insert serial number request details
-      for (const request of phoneRequests) {
-        await query(
-          `INSERT INTO serial_number_requests (
-            service_request_id,
-            phone_number,
-            phone_brand,
-            start_date,
-            end_date
-          ) VALUES ($1, $2, $3, $4, $5)`,
-          [
-            serviceRequestId,
-            request.phone_number,
-            request.phone_brand,
-            request.start_date,
-            request.end_date
-          ]
-        );
-      }
-      
-      // Commit the transaction
-      await query('COMMIT');
-      
-      console.log('Serial number request created successfully');
-      
-      return res.status(201).json({ 
-        referenceNumber,
-        serviceRequestId
-      });
-    } catch (error) {
-      // Rollback in case of error
-      await query('ROLLBACK');
-      
-      console.error('Error creating serial number request:', error);
-      return res.status(500).json({ error: 'Server error: ' + error.message });
     }
-  };
-  
-  /**
-   * Submit stolen phone check
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  export const submitStolenPhoneCheck = async (req, res) => {
-    try {
-      const { formData, imeiRequests, serviceType, userId } = req.body;
-      
-      console.log('Received stolen phone check request:', { formData, imeiRequests });
-      
-      // Validate required fields
-      if (!formData || !imeiRequests || !Array.isArray(imeiRequests)) {
-        return res.status(400).json({ error: 'Invalid request data' });
-      }
-      
-      // Start a transaction
-      await query('BEGIN');
-      
-      // Generate reference number
-      const lastRequestResult = await query(
-        `SELECT reference_number 
-         FROM service_requests 
-         WHERE reference_number LIKE 'SPC-${new Date().getFullYear()}%'
-         ORDER BY created_at DESC 
-         LIMIT 1`
-      );
-      
-      let sequenceNumber = 1;
-      if (lastRequestResult.rows.length > 0) {
-        const lastRefNumber = lastRequestResult.rows[0].reference_number;
-        const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-        sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-      }
-      
-      const referenceNumber = `SPC-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
-      
-      // Get the creator's ID - use either the user ID from request or from the auth token
-      const createdBy = userId || req.user.id || req.user.username;
-      
-      if (!createdBy) {
-        await query('ROLLBACK');
-        return res.status(400).json({ error: 'User information not available' });
-      }
-      
-      // Insert the main service request
-      const serviceRequestResult = await query(
-        `INSERT INTO service_requests (
-          reference_number, 
-          service_type, 
-          full_names, 
-          id_passport, 
-          primary_contact, 
-          secondary_contact, 
-          details, 
-          created_by, 
-          status,
-          created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-        RETURNING id`,
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    console.log('Serial number request created successfully');
+    
+    return res.status(201).json({ 
+      referenceNumber,
+      serviceRequestId
+    });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    
+    console.error('Error creating serial number request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+};
+
+/**
+ * Submit stolen phone check
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const submitStolenPhoneCheck = async (req, res) => {
+  try {
+    const { formData, imeiRequests, serviceType, userId } = req.body;
+    
+    console.log('Received stolen phone check request:', { formData, imeiRequests });
+    
+    // Validate required fields
+    if (!formData || !imeiRequests || !Array.isArray(imeiRequests)) {
+      return res.status(400).json({ error: 'Invalid request data' });
+    }
+    
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
+    );
+    
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
+    
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
+    
+    // Get the creator's ID - use either the user ID from request or from the auth token
+    const createdBy = userId || req.user.id || req.user.username;
+    
+    if (!createdBy) {
+      await query('ROLLBACK');
+      return res.status(400).json({ error: 'User information not available' });
+    }
+    
+    // Insert the main service request
+    const serviceRequestResult = await query(
+      `INSERT INTO service_requests (
+        reference_number, 
+        service_type, 
+        full_names, 
+        id_passport, 
+        primary_contact, 
+        secondary_contact, 
+        details, 
+        created_by, 
+        status,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      RETURNING id`,
+      [
+        referenceNumber,
+        serviceType || 'stolen_phone_check',
+        formData.full_names,
+        formData.id_passport,
+        formData.primary_contact,
+        formData.secondary_contact || null,
+        formData.details || null,
+        createdBy,
+        'new'
+      ]
+    );
+    
+    const serviceRequestId = serviceRequestResult.rows[0].id;
+    
+    // Insert stolen phone check request details
+    for (const request of imeiRequests) {
+      await query(
+        `INSERT INTO stolen_phone_requests (
+          service_request_id,
+          imei_number
+        ) VALUES ($1, $2)`,
         [
-          referenceNumber,
-          serviceType || 'stolen_phone_check',
-          formData.full_names,
-          formData.id_passport,
-          formData.primary_contact,
-          formData.secondary_contact || null,
-          formData.details || null,
-          createdBy,
-          'new'
+          serviceRequestId,
+          request.imei_number
         ]
       );
-      
-      const serviceRequestId = serviceRequestResult.rows[0].id;
-      
-      // Insert stolen phone check request details
-      for (const request of imeiRequests) {
-        await query(
-          `INSERT INTO stolen_phone_requests (
-            service_request_id,
-            imei_number
-          ) VALUES ($1, $2)`,
-          [
-            serviceRequestId,
-            request.imei_number
-          ]
-        );
-      }
-      
-      // Commit the transaction
-      await query('COMMIT');
-      
-      console.log('Stolen phone check request created successfully');
-      
-      return res.status(201).json({ 
-        referenceNumber,
-        serviceRequestId
-      });
-    } catch (error) {
-      // Rollback in case of error
-      await query('ROLLBACK');
-      
-      console.error('Error creating stolen phone check request:', error);
-      return res.status(500).json({ error: 'Server error: ' + error.message });
     }
-  };
-  
-  /**
-   * Submit unblock call request
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  export const submitUnblockCallRequest = async (req, res) => {
-    try {
-      const { formData, phoneNumberRequests, serviceType, userId } = req.body;
-      
-      console.log('Received unblock call request:', { formData, phoneNumberRequests });
-      
-      // Validate required fields
-      if (!formData || !phoneNumberRequests || !Array.isArray(phoneNumberRequests)) {
-        return res.status(400).json({ error: 'Invalid request data' });
-      }
-      
-      // Start a transaction
-      await query('BEGIN');
-      
-      // Generate reference number
-      const lastRequestResult = await query(
-        `SELECT reference_number 
-         FROM service_requests 
-         WHERE reference_number LIKE 'UCR-${new Date().getFullYear()}%'
-         ORDER BY created_at DESC 
-         LIMIT 1`
-      );
-      
-      let sequenceNumber = 1;
-      if (lastRequestResult.rows.length > 0) {
-        const lastRefNumber = lastRequestResult.rows[0].reference_number;
-        const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-        sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-      }
-      
-      const referenceNumber = `UCR-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
-      
-      // Get the creator's ID - use either the user ID from request or from the auth token
-      const createdBy = userId || req.user.id || req.user.username;
-      
-      if (!createdBy) {
-        await query('ROLLBACK');
-        return res.status(400).json({ error: 'User information not available' });
-      }
-      
-      // Insert the main service request
-      const serviceRequestResult = await query(
-        `INSERT INTO service_requests (
-          reference_number, 
-          service_type, 
-          full_names, 
-          id_passport, 
-          primary_contact, 
-          secondary_contact, 
-          details, 
-          created_by, 
-          status,
-          created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-        RETURNING id`,
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    console.log('Stolen phone check request created successfully');
+    
+    return res.status(201).json({ 
+      referenceNumber,
+      serviceRequestId
+    });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    
+    console.error('Error creating stolen phone check request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+};
+
+/**
+ * Submit unblock call request
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const submitUnblockCallRequest = async (req, res) => {
+  try {
+    const { formData, phoneNumberRequests, serviceType, userId } = req.body;
+    
+    console.log('Received unblock call request:', { formData, phoneNumberRequests });
+    
+    // Validate required fields
+    if (!formData || !phoneNumberRequests || !Array.isArray(phoneNumberRequests)) {
+      return res.status(400).json({ error: 'Invalid request data' });
+    }
+    
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
+    );
+    
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
+    
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
+    
+    // Get the creator's ID - use either the user ID from request or from the auth token
+    const createdBy = userId || req.user.id || req.user.username;
+    
+    if (!createdBy) {
+      await query('ROLLBACK');
+      return res.status(400).json({ error: 'User information not available' });
+    }
+    
+    // Insert the main service request
+    const serviceRequestResult = await query(
+      `INSERT INTO service_requests (
+        reference_number, 
+        service_type, 
+        full_names, 
+        id_passport, 
+        primary_contact, 
+        secondary_contact, 
+        details, 
+        created_by, 
+        status,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      RETURNING id`,
+      [
+        referenceNumber,
+        serviceType || 'unblock_call_request',
+        formData.full_names,
+        formData.id_passport,
+        formData.primary_contact,
+        formData.secondary_contact || null,
+        formData.details || null,
+        createdBy,
+        'new'
+      ]
+    );
+    
+    const serviceRequestId = serviceRequestResult.rows[0].id;
+    
+    // Insert unblock call request details
+    for (const request of phoneNumberRequests) {
+      await query(
+        `INSERT INTO unblock_call_requests (
+          service_request_id,
+          phone_number,
+          date_blocked,
+          reason_blocked
+        ) VALUES ($1, $2, $3, $4)`,
         [
-          referenceNumber,
-          serviceType || 'unblock_call_request',
-          formData.full_names,
-          formData.id_passport,
-          formData.primary_contact,
-          formData.secondary_contact || null,
-          formData.details || null,
-          createdBy,
-          'new'
+          serviceRequestId,
+          request.number,
+          request.date_blocked || null,
+          request.reason_blocked || null
         ]
       );
-      
-      const serviceRequestId = serviceRequestResult.rows[0].id;
-      
-      // Insert unblock call request details
-      for (const request of phoneNumberRequests) {
-        await query(
-          `INSERT INTO unblock_call_requests (
-            service_request_id,
-            phone_number,
-            date_blocked,
-            reason_blocked
-          ) VALUES ($1, $2, $3, $4)`,
-          [
-            serviceRequestId,
-            request.number,
-            request.date_blocked || null,
-            request.reason_blocked || null
-          ]
-        );
-      }
-      
-      // Commit the transaction
-      await query('COMMIT');
-      
-      console.log('Unblock call request created successfully');
-      
-      return res.status(201).json({ 
-        referenceNumber,
-        serviceRequestId
-      });
-    } catch (error) {
-      // Rollback in case of error
-      await query('ROLLBACK');
-      
-      console.error('Error creating unblock call request:', error);
-      return res.status(500).json({ error: 'Server error: ' + error.message });
     }
-  };
-  
-  /**
-   * Submit other request
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   */
-  export const submitOtherRequest = async (req, res) => {
-    try {
-      const { formData, otherRequests, serviceType, userId } = req.body;
-      
-      console.log('Received other request:', { formData, otherRequests });
-      
-      // Validate required fields
-      if (!formData || !otherRequests || !Array.isArray(otherRequests)) {
-        return res.status(400).json({ error: 'Invalid request data' });
-      }
-      
-      // Start a transaction
-      await query('BEGIN');
-      
-      // Generate reference number
-      const lastRequestResult = await query(
-        `SELECT reference_number 
-         FROM service_requests 
-         WHERE reference_number LIKE 'OTR-${new Date().getFullYear()}%'
-         ORDER BY created_at DESC 
-         LIMIT 1`
-      );
-      
-      let sequenceNumber = 1;
-      if (lastRequestResult.rows.length > 0) {
-        const lastRefNumber = lastRequestResult.rows[0].reference_number;
-        const lastSequence = parseInt(lastRefNumber.split('-')[2]);
-        sequenceNumber = isNaN(lastSequence) ? 1 : lastSequence + 1;
-      }
-      
-      const referenceNumber = `OTR-${new Date().getFullYear()}-${sequenceNumber.toString().padStart(4, '0')}`;
-      
-      // Get the creator's ID - use either the user ID from request or from the auth token
-      const createdBy = userId || req.user.id || req.user.username;
-      
-      if (!createdBy) {
-        await query('ROLLBACK');
-        return res.status(400).json({ error: 'User information not available' });
-      }
-      
-      // Insert the main service request
-      const serviceRequestResult = await query(
-        `INSERT INTO service_requests (
-          reference_number, 
-          service_type, 
-          full_names, 
-          id_passport, 
-          primary_contact, 
-          secondary_contact, 
-          details, 
-          created_by, 
-          status,
-          created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-        RETURNING id`,
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    console.log('Unblock call request created successfully');
+    
+    return res.status(201).json({ 
+      referenceNumber,
+      serviceRequestId
+    });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    
+    console.error('Error creating unblock call request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+};
+
+/**
+ * Submit other request
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const submitOtherRequest = async (req, res) => {
+  try {
+    const { formData, otherRequests, serviceType, userId } = req.body;
+    
+    console.log('Received other request:', { formData, otherRequests });
+    
+    // Validate required fields
+    if (!formData || !otherRequests || !Array.isArray(otherRequests)) {
+      return res.status(400).json({ error: 'Invalid request data' });
+    }
+    
+    // Start a transaction
+    await query('BEGIN');
+    
+    // Get existing reference numbers for the current year
+    const existingRefResult = await query(
+      `SELECT reference_number FROM service_requests 
+       WHERE reference_number LIKE 'SSR-${new Date().getFullYear()}-%'`
+    );
+    
+    // Extract reference numbers array
+    const refNumbers = existingRefResult.rows.map(row => row.reference_number);
+    
+    // Get next sequential number and generate reference number using utility functions
+    const nextSeqNumber = getNextSequentialNumber(refNumbers);
+    const referenceNumber = generateReferenceNumber(nextSeqNumber);
+    
+    // Get the creator's ID - use either the user ID from request or from the auth token
+    const createdBy = userId || req.user.id || req.user.username;
+    
+    if (!createdBy) {
+      await query('ROLLBACK');
+      return res.status(400).json({ error: 'User information not available' });
+    }
+    
+    // Insert the main service request
+    const serviceRequestResult = await query(
+      `INSERT INTO service_requests (
+        reference_number, 
+        service_type, 
+        full_names, 
+        id_passport, 
+        primary_contact, 
+        secondary_contact, 
+        details, 
+        created_by, 
+        status,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      RETURNING id`,
+      [
+        referenceNumber,
+        serviceType || 'other_request',
+        formData.full_names,
+        formData.id_passport,
+        formData.primary_contact,
+        formData.secondary_contact || null,
+        formData.details || null,
+        createdBy,
+        'new'
+      ]
+    );
+    
+    const serviceRequestId = serviceRequestResult.rows[0].id;
+    
+    // Insert other request details
+    for (const request of otherRequests) {
+      await query(
+        `INSERT INTO other_requests (
+          service_request_id,
+          reference_number,
+          request_date
+        ) VALUES ($1, $2, $3)`,
         [
-          referenceNumber,
-          serviceType || 'other_request',
-          formData.full_names,
-          formData.id_passport,
-          formData.primary_contact,
-          formData.secondary_contact || null,
-          formData.details || null,
-          createdBy,
-          'new'
+          serviceRequestId,
+          request.number,
+          request.request_date
         ]
       );
-      
-      const serviceRequestId = serviceRequestResult.rows[0].id;
-      
-      // Insert other request details
-      for (const request of otherRequests) {
-        await query(
-          `INSERT INTO other_requests (
-            service_request_id,
-            reference_number,
-            request_date
-          ) VALUES ($1, $2, $3)`,
-          [
-            serviceRequestId,
-            request.number,
-            request.request_date
-          ]
-        );
-      }
-      
-      // Commit the transaction
-      await query('COMMIT');
-      
-      console.log('Other request created successfully');
-      
-      return res.status(201).json({ 
-        referenceNumber,
-        serviceRequestId
-      });
-    } catch (error) {
-      // Rollback in case of error
-      await query('ROLLBACK');
-      
-      console.error('Error creating other request:', error);
-      return res.status(500).json({ error: 'Server error: ' + error.message });
     }
-  };
+    
+    // Commit the transaction
+    await query('COMMIT');
+    
+    console.log('Other request created successfully');
+    
+    return res.status(201).json({ 
+      referenceNumber,
+      serviceRequestId
+    });
+  } catch (error) {
+    // Rollback in case of error
+    await query('ROLLBACK');
+    
+    console.error('Error creating other request:', error);
+    return res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+};
